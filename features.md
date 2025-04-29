@@ -19,4 +19,4 @@
 - **Template preview functionality with multiple views for iterative refinement**
 - **Master list of predefined activities/tasks for checklist creation**
 - **Category-based organization of activity checklists by groups**
-- **Drag-and-drop interface for building and modifying checklists** 
+- **Drag-and-drop interface for building and modifying checklists**

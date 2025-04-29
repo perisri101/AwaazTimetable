@@ -1,11 +1,12 @@
-from flask import Flask, render_template, redirect, url_for, flash, request, jsonify
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, session
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_wtf.csrf import CSRFProtect
-from datetime import datetime
+from datetime import datetime, timedelta, date
 import os
 import json
-from models import db, User, Caregiver, Template, Calendar, Shift, ChecklistItem, ActivityCategory, Activity
-from forms import LoginForm, UserForm, CaregiverForm, TemplateForm
+import calendar
+from .models import db, User, Caregiver, Template, Calendar, Shift, ChecklistItem, ActivityCategory, Activity
+from .forms import LoginForm, UserForm, CaregiverForm, TemplateForm
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-for-awaaz-flexy-timetable')
