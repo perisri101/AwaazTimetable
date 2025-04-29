@@ -1,0 +1,425 @@
+{% extends "base.html" %}
+
+{% block title %}Calendar - {{ calendar.name }} - Awaaz Flexy Timetable{% endblock %}
+
+{% block head %}
+<style>
+    .timetable-container {
+        max-width: 100%;
+        overflow-x: auto;
+    }
+    
+    .timetable-grid {
+        display: grid;
+        grid-template-columns: 100px repeat(7, minmax(150px, 1fr));
+        gap: 2px;
+        min-width: 1050px;
+    }
+    
+    .timetable-header {
+        background-color: var(--primary-color);
+        color: white;
+        padding: 10px;
+        text-align: center;
+        font-weight: bold;
+        border-radius: 4px;
+    }
+    
+    .timetable-time {
+        background-color: var(--light-color);
+        padding: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        border-radius: 4px;
+    }
+    
+    .timetable-cell {
+        background-color: white;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 10px;
+        min-height: 80px;
+    }
+    
+    .caregiver-chip {
+        display: inline-block;
+        padding: 2px 8px;
+        margin: 2px;
+        border-radius: 16px;
+        background-color: #2196f3;
+        color: white;
+        font-size: 0.8rem;
+    }
+    
+    .checklist-item {
+        margin-top: 5px;
+        padding: 5px;
+        background-color: #f0f0f0;
+        border-radius: 4px;
+        font-size: 0.8rem;
+    }
+    
+    .checklist-complete {
+        background-color: #e6f4ea;
+        text-decoration: line-through;
+        color: #555;
+    }
+    
+    .checklist-toggle {
+        cursor: pointer;
+    }
+    
+    .view-modes {
+        margin-bottom: 20px;
+    }
+    
+    .caregiver-view {
+        display: none;
+    }
+    
+    .caregiver-card {
+        margin-bottom: 20px;
+    }
+    
+    .caregiver-schedule {
+        margin-top: 10px;
+    }
+    
+    .caregiver-day {
+        margin-bottom: 10px;
+    }
+    
+    .caregiver-shift {
+        display: inline-block;
+        padding: 5px 10px;
+        margin: 2px;
+        background-color: #e6f4ea;
+        border-radius: 4px;
+        font-size: 0.9rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1>{{ calendar.name }}</h1>
+        <p class="lead">{{ calendar.description }}</p>
+        <p>
+            <strong>Start Date:</strong> {{ calendar.start_date.strftime('%Y-%m-%d') }} | 
+            <strong>Template:</strong> {{ calendar.template.name }}
+        </p>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{{ url_for('calendar_reports', id=calendar.id) }}" class="btn btn-info me-2">
+            <i class="bi bi-graph-up"></i> Reports
+        </a>
+        <a href="{{ url_for('list_calendars') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Calendars
+        </a>
+    </div>
+</div>
+
+<div class="view-modes">
+    <div class="btn-group" role="group">
+        <button type="button" class="btn btn-primary active" id="hourlyViewBtn">
+            <i class="bi bi-grid-3x3"></i> Hourly View
+        </button>
+        <button type="button" class="btn btn-outline-primary" id="caregiverViewBtn">
+            <i class="bi bi-people"></i> Caregiver View
+        </button>
+    </div>
+</div>
+
+<!-- Hourly View -->
+<div class="hourly-view">
+    <div class="timetable-container">
+        <div class="timetable-grid">
+            <div class="timetable-header">Time / Day</div>
+            <div class="timetable-header">Monday</div>
+            <div class="timetable-header">Tuesday</div>
+            <div class="timetable-header">Wednesday</div>
+            <div class="timetable-header">Thursday</div>
+            <div class="timetable-header">Friday</div>
+            <div class="timetable-header">Saturday</div>
+            <div class="timetable-header">Sunday</div>
+            
+            {% for hour in range(0, 24, 2) %}
+            <div class="timetable-time">{{ "%02d:00"|format(hour) }}<br>{{ "%02d:00"|format(hour+2) }}</div>
+            {% for day in range(7) %}
+            <div class="timetable-cell" id="cell-{{ day }}-{{ hour }}">
+                <div class="caregivers-container" id="caregivers-{{ day }}-{{ hour }}"></div>
+                <div class="checklist-container mt-2" id="checklist-{{ day }}-{{ hour }}"></div>
+            </div>
+            {% endfor %}
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Caregiver View -->
+<div class="caregiver-view">
+    <div class="row" id="caregiver-cards-container">
+        <!-- Caregiver cards will be inserted here -->
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999;">
+    <div class="d-flex justify-content-center align-items-center h-100">
+        <div class="card p-4">
+            <div class="d-flex align-items-center">
+                <div class="spinner-border text-primary me-3" role="status"></div>
+                <div>
+                    <h5 class="mb-0">Loading Calendar...</h5>
+                    <p class="mb-0">Please wait</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Store calendar data
+    let calendarData = {
+        shifts: [],
+        checklists: []
+    };
+    
+    // Store caregivers data by ID for quick lookup
+    let caregiversById = {};
+    {% for caregiver in caregivers %}
+    caregiversById[{{ caregiver.id }}] = {
+        id: {{ caregiver.id }},
+        name: "{{ caregiver.name }}",
+        shifts: []
+    };
+    {% endfor %}
+    
+    // Load calendar data
+    loadCalendarData();
+    
+    // View mode toggle
+    document.getElementById('hourlyViewBtn').addEventListener('click', function() {
+        document.querySelector('.hourly-view').style.display = 'block';
+        document.querySelector('.caregiver-view').style.display = 'none';
+        this.classList.add('active');
+        this.classList.remove('btn-outline-primary');
+        this.classList.add('btn-primary');
+        document.getElementById('caregiverViewBtn').classList.remove('active');
+        document.getElementById('caregiverViewBtn').classList.remove('btn-primary');
+        document.getElementById('caregiverViewBtn').classList.add('btn-outline-primary');
+    });
+    
+    document.getElementById('caregiverViewBtn').addEventListener('click', function() {
+        document.querySelector('.hourly-view').style.display = 'none';
+        document.querySelector('.caregiver-view').style.display = 'block';
+        this.classList.add('active');
+        this.classList.remove('btn-outline-primary');
+        this.classList.add('btn-primary');
+        document.getElementById('hourlyViewBtn').classList.remove('active');
+        document.getElementById('hourlyViewBtn').classList.remove('btn-primary');
+        document.getElementById('hourlyViewBtn').classList.add('btn-outline-primary');
+    });
+    
+    // ----- Functions -----
+    
+    // Load calendar data from API
+    function loadCalendarData() {
+        // Show loading overlay
+        document.getElementById('loadingOverlay').style.display = 'block';
+        
+        fetch('{{ url_for("get_calendar_shifts", id=calendar.id) }}')
+            .then(response => response.json())
+            .then(data => {
+                calendarData = data;
+                
+                // Process shifts for caregiver view
+                calendarData.shifts.forEach(shift => {
+                    if (caregiversById[shift.caregiver_id]) {
+                        caregiversById[shift.caregiver_id].shifts.push(shift);
+                    }
+                });
+                
+                // Render hourly view
+                renderHourlyView();
+                
+                // Render caregiver view
+                renderCaregiverView();
+                
+                // Hide loading overlay
+                document.getElementById('loadingOverlay').style.display = 'none';
+            })
+            .catch(error => {
+                console.error('Error loading calendar data:', error);
+                document.getElementById('loadingOverlay').style.display = 'none';
+                alert('An error occurred while loading calendar data.');
+            });
+    }
+    
+    // Render hourly view
+    function renderHourlyView() {
+        // Clear all cells
+        document.querySelectorAll('.caregivers-container').forEach(container => {
+            container.innerHTML = '';
+        });
+        
+        document.querySelectorAll('.checklist-container').forEach(container => {
+            container.innerHTML = '';
+        });
+        
+        // Add caregivers to cells
+        calendarData.shifts.forEach(shift => {
+            const caregiverName = caregiversById[shift.caregiver_id]?.name || 'Unknown';
+            const container = document.getElementById(`caregivers-${shift.day_of_week}-${shift.start_hour}`);
+            
+            if (container) {
+                const caregiverElement = document.createElement('div');
+                caregiverElement.className = 'caregiver-chip';
+                caregiverElement.textContent = caregiverName;
+                container.appendChild(caregiverElement);
+            }
+        });
+        
+        // Add checklist items to cells
+        calendarData.checklists.forEach(item => {
+            const container = document.getElementById(`checklist-${item.day_of_week}-${item.start_hour}`);
+            
+            if (container) {
+                const itemElement = document.createElement('div');
+                itemElement.className = `checklist-item ${item.completed ? 'checklist-complete' : ''}`;
+                itemElement.dataset.itemId = item.id;
+                itemElement.innerHTML = `
+                    <div class="d-flex align-items-start">
+                        <div class="form-check">
+                            <input class="form-check-input checklist-toggle" type="checkbox" 
+                                   ${item.completed ? 'checked' : ''} 
+                                   data-item-id="${item.id}">
+                        </div>
+                        <div>${item.description}</div>
+                    </div>
+                `;
+                container.appendChild(itemElement);
+                
+                // Add event listener to toggle completion
+                const checkbox = itemElement.querySelector('.checklist-toggle');
+                checkbox.addEventListener('change', function() {
+                    toggleChecklistItem(item.id, this.checked);
+                    if (this.checked) {
+                        itemElement.classList.add('checklist-complete');
+                    } else {
+                        itemElement.classList.remove('checklist-complete');
+                    }
+                });
+            }
+        });
+    }
+    
+    // Render caregiver view
+    function renderCaregiverView() {
+        const container = document.getElementById('caregiver-cards-container');
+        container.innerHTML = '';
+        
+        // Define day names
+        const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        
+        // Create a card for each caregiver
+        for (const caregiverId in caregiversById) {
+            const caregiver = caregiversById[caregiverId];
+            
+            // Skip caregivers with no shifts
+            if (caregiver.shifts.length === 0) {
+                continue;
+            }
+            
+            // Calculate total hours
+            let totalHours = 0;
+            const hoursByDay = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0};
+            const shiftsByDay = {0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: []};
+            
+            caregiver.shifts.forEach(shift => {
+                const hours = shift.end_hour - shift.start_hour;
+                totalHours += hours;
+                hoursByDay[shift.day_of_week] += hours;
+                shiftsByDay[shift.day_of_week].push(shift);
+            });
+            
+            // Count working days
+            const workingDays = Object.values(hoursByDay).filter(hours => hours > 0).length;
+            
+            // Create caregiver card
+            const caregiverCard = document.createElement('div');
+            caregiverCard.className = 'col-md-6 col-lg-4';
+            caregiverCard.innerHTML = `
+                <div class="card caregiver-card">
+                    <div class="card-header">
+                        <h4 class="mb-0">${caregiver.name}</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="caregiver-stats mb-3">
+                            <div class="row">
+                                <div class="col-4 text-center">
+                                    <div class="h4 mb-0">${totalHours}</div>
+                                    <div class="small">Hours / Week</div>
+                                </div>
+                                <div class="col-4 text-center">
+                                    <div class="h4 mb-0">${workingDays}</div>
+                                    <div class="small">Days / Week</div>
+                                </div>
+                                <div class="col-4 text-center">
+                                    <div class="h4 mb-0">${Math.round(totalHours / workingDays * 10) / 10}</div>
+                                    <div class="small">Hours / Day</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="caregiver-schedule">
+                            <div class="accordion" id="accordion-${caregiverId}">
+                                ${dayNames.map((dayName, dayIndex) => {
+                                    if (hoursByDay[dayIndex] === 0) return '';
+                                    
+                                    return `
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header">
+                                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-${caregiverId}-${dayIndex}">
+                                                    ${dayName} <span class="ms-2 badge bg-primary">${hoursByDay[dayIndex]} hrs</span>
+                                                </button>
+                                            </h2>
+                                            <div id="collapse-${caregiverId}-${dayIndex}" class="accordion-collapse collapse">
+                                                <div class="accordion-body">
+                                                    ${shiftsByDay[dayIndex].map(shift => {
+                                                        return `<div class="caregiver-shift">${shift.start_hour}:00 - ${shift.end_hour}:00</div>`;
+                                                    }).join('')}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            container.appendChild(caregiverCard);
+        }
+    }
+    
+    // Toggle checklist item completion
+    function toggleChecklistItem(itemId, completed) {
+        // Update local data
+        const item = calendarData.checklists.find(item => item.id === itemId);
+        if (item) {
+            item.completed = completed;
+        }
+        
+        // TODO: Send update to server (will be implemented in a future API endpoint)
+        console.log(`Item ${itemId} marked as ${completed ? 'completed' : 'incomplete'}`);
+    }
+});
+</script>
+{% endblock %} 

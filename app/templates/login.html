@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Login - Awaaz Flexy Timetable{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-5">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="mb-0">Login</h3>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('login') }}">
+                    {{ form.hidden_tag() }}
+                    
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Username</label>
+                        {{ form.username(class="form-control", id="username", placeholder="Enter your username") }}
+                        {% if form.username.errors %}
+                        <div class="text-danger">
+                            {% for error in form.username.errors %}
+                            <small>{{ error }}</small>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password</label>
+                        {{ form.password(class="form-control", id="password", placeholder="Enter your password") }}
+                        {% if form.password.errors %}
+                        <div class="text-danger">
+                            {% for error in form.password.errors %}
+                            <small>{{ error }}</small>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3 form-check">
+                        {{ form.remember_me(class="form-check-input", id="remember_me") }}
+                        <label class="form-check-label" for="remember_me">Remember me</label>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">Login</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

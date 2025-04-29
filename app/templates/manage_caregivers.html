@@ -1,0 +1,520 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Caregivers - Awaaz Flexy Timetable{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1>Manage Caregivers</h1>
+        <p class="lead">Add, edit, or remove caregivers for scheduling</p>
+    </div>
+    <div class="col-md-4 text-end">
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCaregiverModal">
+            <i class="bi bi-person-plus"></i> Add Caregiver
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="mb-0">Caregivers</h3>
+            </div>
+            <div class="card-body">
+                {% if caregivers %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Phone</th>
+                                <th>Max Hours/Week</th>
+                                <th>Max Hours/Day</th>
+                                <th>Max Days/Week</th>
+                                <th>Hourly Rate ($)</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="caregivers-table-body">
+                            {% for caregiver in caregivers %}
+                            <tr id="caregiver-{{ caregiver.id }}">
+                                <td>{{ caregiver.name }}</td>
+                                <td>{{ caregiver.email }}</td>
+                                <td>{{ caregiver.phone or '-' }}</td>
+                                <td>{{ caregiver.max_hours_per_week }}</td>
+                                <td>{{ caregiver.max_hours_per_day }}</td>
+                                <td>{{ caregiver.max_days_per_week }}</td>
+                                <td>{{ caregiver.rate or '-' }}</td>
+                                <td class="text-end">
+                                    <button class="btn btn-sm btn-outline-primary edit-caregiver" 
+                                            data-caregiver-id="{{ caregiver.id }}"
+                                            data-caregiver-name="{{ caregiver.name }}"
+                                            data-caregiver-email="{{ caregiver.email }}"
+                                            data-caregiver-phone="{{ caregiver.phone or '' }}"
+                                            data-caregiver-max-hours-week="{{ caregiver.max_hours_per_week }}"
+                                            data-caregiver-max-hours-day="{{ caregiver.max_hours_per_day }}"
+                                            data-caregiver-max-days-week="{{ caregiver.max_days_per_week }}"
+                                            data-caregiver-rate="{{ caregiver.rate or '' }}">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-danger delete-caregiver"
+                                            data-caregiver-id="{{ caregiver.id }}"
+                                            data-caregiver-name="{{ caregiver.name }}">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="bi bi-people display-4 text-muted mb-3"></i>
+                    <p>No caregivers found. Add your first caregiver to get started.</p>
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCaregiverModal">
+                        <i class="bi bi-person-plus"></i> Add Caregiver
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Caregiver Modal -->
+<div class="modal fade" id="addCaregiverModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add New Caregiver</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addCaregiverForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    
+                    <div class="mb-3">
+                        <label for="add-name" class="form-label">Name</label>
+                        {{ form.name(class="form-control", id="add-name", placeholder="Full Name") }}
+                        <div class="invalid-feedback" id="add-name-feedback"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="add-email" class="form-label">Email</label>
+                        {{ form.email(class="form-control", id="add-email", placeholder="Email Address") }}
+                        <div class="invalid-feedback" id="add-email-feedback"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="add-phone" class="form-label">Phone (Optional)</label>
+                        {{ form.phone(class="form-control", id="add-phone", placeholder="Phone Number") }}
+                        <div class="invalid-feedback" id="add-phone-feedback"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="add-rate" class="form-label">Hourly Rate ($) (Optional)</label>
+                        {{ form.rate(class="form-control", id="add-rate", placeholder="0.00") }}
+                        <div class="invalid-feedback" id="add-rate-feedback"></div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="add-max-hours-week" class="form-label">Max Hrs/Week</label>
+                                {{ form.max_hours_per_week(class="form-control", id="add-max-hours-week", placeholder="40") }}
+                                <div class="invalid-feedback" id="add-max-hours-week-feedback"></div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="add-max-hours-day" class="form-label">Max Hrs/Day</label>
+                                {{ form.max_hours_per_day(class="form-control", id="add-max-hours-day", placeholder="8") }}
+                                <div class="invalid-feedback" id="add-max-hours-day-feedback"></div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="add-max-days-week" class="form-label">Max Days/Week</label>
+                                {{ form.max_days_per_week(class="form-control", id="add-max-days-week", placeholder="5") }}
+                                <div class="invalid-feedback" id="add-max-days-week-feedback"></div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveNewCaregiverBtn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Caregiver Modal -->
+<div class="modal fade" id="editCaregiverModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Caregiver</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editCaregiverForm">
+                    <input type="hidden" id="edit-caregiver-id">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    
+                    <div class="mb-3">
+                        <label for="edit-name" class="form-label">Name</label>
+                        <input type="text" class="form-control" id="edit-name" required>
+                        <div class="invalid-feedback" id="edit-name-feedback"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit-email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="edit-email" required>
+                        <div class="invalid-feedback" id="edit-email-feedback"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit-phone" class="form-label">Phone (Optional)</label>
+                        <input type="tel" class="form-control" id="edit-phone">
+                        <div class="invalid-feedback" id="edit-phone-feedback"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit-rate" class="form-label">Hourly Rate ($) (Optional)</label>
+                        <input type="number" step="0.01" min="0" class="form-control" id="edit-rate">
+                        <div class="invalid-feedback" id="edit-rate-feedback"></div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="edit-max-hours-week" class="form-label">Max Hrs/Week</label>
+                                <input type="number" class="form-control" id="edit-max-hours-week" value="40">
+                                <div class="invalid-feedback" id="edit-max-hours-week-feedback"></div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="edit-max-hours-day" class="form-label">Max Hrs/Day</label>
+                                <input type="number" class="form-control" id="edit-max-hours-day" value="8">
+                                <div class="invalid-feedback" id="edit-max-hours-day-feedback"></div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="edit-max-days-week" class="form-label">Max Days/Week</label>
+                                <input type="number" class="form-control" id="edit-max-days-week" value="5">
+                                <div class="invalid-feedback" id="edit-max-days-week-feedback"></div>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="updateCaregiverBtn">Update</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteCaregiverModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <strong id="delete-caregiver-name"></strong>?</p>
+                <p class="text-danger">This action cannot be undone and may affect existing schedules.</p>
+                <input type="hidden" id="delete-caregiver-id">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Get CSRF token from the hidden input field
+    let csrfToken = document.querySelector('input[name="csrf_token"]').value;
+                    
+    // Add new caregiver
+    document.getElementById('saveNewCaregiverBtn').addEventListener('click', function() {
+        const formData = {
+            name: document.getElementById('add-name').value,
+            email: document.getElementById('add-email').value,
+            phone: document.getElementById('add-phone').value,
+            rate: document.getElementById('add-rate').value || 0,
+            max_hours_per_week: document.getElementById('add-max-hours-week').value || 40,
+            max_hours_per_day: document.getElementById('add-max-hours-day').value || 8,
+            max_days_per_week: document.getElementById('add-max-days-week').value || 5
+        };
+        
+        fetch('{{ url_for("add_caregiver") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(formData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Add caregiver to table
+                const tbody = document.getElementById('caregivers-table-body');
+                const tr = document.createElement('tr');
+                tr.id = `caregiver-${data.caregiver.id}`;
+                tr.innerHTML = `
+                    <td>${data.caregiver.name}</td>
+                    <td>${data.caregiver.email}</td>
+                    <td>${data.caregiver.phone || '-'}</td>
+                    <td>${data.caregiver.max_hours_per_week}</td>
+                    <td>${data.caregiver.max_hours_per_day}</td>
+                    <td>${data.caregiver.max_days_per_week}</td>
+                    <td>${data.caregiver.rate || '-'}</td>
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-outline-primary edit-caregiver" 
+                                data-caregiver-id="${data.caregiver.id}"
+                                data-caregiver-name="${data.caregiver.name}"
+                                data-caregiver-email="${data.caregiver.email}"
+                                data-caregiver-phone="${data.caregiver.phone || ''}"
+                                data-caregiver-max-hours-week="${data.caregiver.max_hours_per_week}"
+                                data-caregiver-max-hours-day="${data.caregiver.max_hours_per_day}"
+                                data-caregiver-max-days-week="${data.caregiver.max_days_per_week}"
+                                data-caregiver-rate="${data.caregiver.rate || ''}">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger delete-caregiver"
+                                data-caregiver-id="${data.caregiver.id}"
+                                data-caregiver-name="${data.caregiver.name}">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                `;
+                
+                // If this is the first caregiver, replace the empty state message with the table
+                if (!document.querySelector('table')) {
+                    document.querySelector('.card-body').innerHTML = `
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Phone</th>
+                                    <th>Max Hours/Week</th>
+                                    <th>Max Hours/Day</th>
+                                    <th>Max Days/Week</th>
+                                    <th>Hourly Rate ($)</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="caregivers-table-body"></tbody>
+                        </table>
+                    </div>
+                    `;
+                    tbody = document.getElementById('caregivers-table-body');
+                }
+                
+                tbody.appendChild(tr);
+                
+                // Close modal and reset form
+                const modal = bootstrap.Modal.getInstance(document.getElementById('addCaregiverModal'));
+                modal.hide();
+                document.getElementById('addCaregiverForm').reset();
+                
+                // Add event listeners to the new buttons
+                addEventListeners();
+            } else {
+                // Show validation errors
+                if (data.errors) {
+                    Object.keys(data.errors).forEach(field => {
+                        const input = document.getElementById(`add-${field}`);
+                        const feedback = document.getElementById(`add-${field}-feedback`);
+                        input.classList.add('is-invalid');
+                        feedback.textContent = data.errors[field][0];
+                    });
+                }
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    });
+    
+    // Edit caregiver
+    function addEventListeners() {
+        // Edit button click event
+        document.querySelectorAll('.edit-caregiver').forEach(button => {
+            button.addEventListener('click', function() {
+                const id = this.getAttribute('data-caregiver-id');
+                const name = this.getAttribute('data-caregiver-name');
+                const email = this.getAttribute('data-caregiver-email');
+                const phone = this.getAttribute('data-caregiver-phone');
+                const maxHoursWeek = this.getAttribute('data-caregiver-max-hours-week');
+                const maxHoursDay = this.getAttribute('data-caregiver-max-hours-day');
+                const maxDaysWeek = this.getAttribute('data-caregiver-max-days-week');
+                const rate = this.getAttribute('data-caregiver-rate');
+                
+                document.getElementById('edit-caregiver-id').value = id;
+                document.getElementById('edit-name').value = name;
+                document.getElementById('edit-email').value = email;
+                document.getElementById('edit-phone').value = phone;
+                document.getElementById('edit-max-hours-week').value = maxHoursWeek;
+                document.getElementById('edit-max-hours-day').value = maxHoursDay;
+                document.getElementById('edit-max-days-week').value = maxDaysWeek;
+                document.getElementById('edit-rate').value = rate;
+                
+                const modal = new bootstrap.Modal(document.getElementById('editCaregiverModal'));
+                modal.show();
+            });
+        });
+        
+        // Delete button click event
+        document.querySelectorAll('.delete-caregiver').forEach(button => {
+            button.addEventListener('click', function() {
+                const id = this.getAttribute('data-caregiver-id');
+                const name = this.getAttribute('data-caregiver-name');
+                
+                document.getElementById('delete-caregiver-id').value = id;
+                document.getElementById('delete-caregiver-name').textContent = name;
+                
+                const modal = new bootstrap.Modal(document.getElementById('deleteCaregiverModal'));
+                modal.show();
+            });
+        });
+    }
+    
+    // Initial setup of event listeners
+    addEventListeners();
+    
+    // Update caregiver
+    document.getElementById('updateCaregiverBtn').addEventListener('click', function() {
+        const id = document.getElementById('edit-caregiver-id').value;
+        const formData = {
+            name: document.getElementById('edit-name').value,
+            email: document.getElementById('edit-email').value,
+            phone: document.getElementById('edit-phone').value,
+            rate: document.getElementById('edit-rate').value || 0,
+            max_hours_per_week: document.getElementById('edit-max-hours-week').value || 40,
+            max_hours_per_day: document.getElementById('edit-max-hours-day').value || 8,
+            max_days_per_week: document.getElementById('edit-max-days-week').value || 5
+        };
+        
+        fetch(`{{ url_for('edit_caregiver', id=0) }}`.replace('0', id), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(formData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Update table row
+                const row = document.getElementById(`caregiver-${id}`);
+                const caregiver = data.caregiver;
+                
+                row.innerHTML = `
+                    <td>${caregiver.name}</td>
+                    <td>${caregiver.email}</td>
+                    <td>${caregiver.phone || '-'}</td>
+                    <td>${caregiver.max_hours_per_week}</td>
+                    <td>${caregiver.max_hours_per_day}</td>
+                    <td>${caregiver.max_days_per_week}</td>
+                    <td>${caregiver.rate || '-'}</td>
+                    <td class="text-end">
+                        <button class="btn btn-sm btn-outline-primary edit-caregiver" 
+                                data-caregiver-id="${caregiver.id}"
+                                data-caregiver-name="${caregiver.name}"
+                                data-caregiver-email="${caregiver.email}"
+                                data-caregiver-phone="${caregiver.phone || ''}"
+                                data-caregiver-max-hours-week="${caregiver.max_hours_per_week}"
+                                data-caregiver-max-hours-day="${caregiver.max_hours_per_day}"
+                                data-caregiver-max-days-week="${caregiver.max_days_per_week}"
+                                data-caregiver-rate="${caregiver.rate || ''}">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger delete-caregiver"
+                                data-caregiver-id="${caregiver.id}"
+                                data-caregiver-name="${caregiver.name}">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                `;
+                
+                // Close modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('editCaregiverModal'));
+                modal.hide();
+                
+                // Re-add event listeners
+                addEventListeners();
+            } else {
+                // Show validation errors
+                if (data.errors) {
+                    Object.keys(data.errors).forEach(field => {
+                        const input = document.getElementById(`edit-${field}`);
+                        const feedback = document.getElementById(`edit-${field}-feedback`);
+                        input.classList.add('is-invalid');
+                        feedback.textContent = data.errors[field][0];
+                    });
+                }
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    });
+    
+    // Delete caregiver
+    document.getElementById('confirmDeleteBtn').addEventListener('click', function() {
+        const id = document.getElementById('delete-caregiver-id').value;
+        
+        fetch(`{{ url_for('delete_caregiver', id=0) }}`.replace('0', id), {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Remove table row
+                const row = document.getElementById(`caregiver-${id}`);
+                row.remove();
+                
+                // If no more caregivers, show empty state
+                const tbody = document.getElementById('caregivers-table-body');
+                if (tbody.children.length === 0) {
+                    document.querySelector('.card-body').innerHTML = `
+                    <div class="text-center py-4">
+                        <i class="bi bi-people display-4 text-muted mb-3"></i>
+                        <p>No caregivers found. Add your first caregiver to get started.</p>
+                        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addCaregiverModal">
+                            <i class="bi bi-person-plus"></i> Add Caregiver
+                        </button>
+                    </div>
+                    `;
+                }
+                
+                // Close modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('deleteCaregiverModal'));
+                modal.hide();
+            }
+        })
+        .catch(error => console.error('Error:', error));
+    });
+});
+</script>
+{% endblock %} 

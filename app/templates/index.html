@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Home - Awaaz Flexy Timetable{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 text-center mb-5">
+        <h1 class="display-4">Welcome to Awaaz Flexy Timetable</h1>
+        <p class="lead">A flexible 24/7 scheduling system for caregivers</p>
+        {% if not current_user.is_authenticated %}
+        <a href="{{ url_for('login') }}" class="btn btn-primary mt-3">Login to Dashboard</a>
+        {% else %}
+        <a href="{{ url_for('dashboard') }}" class="btn btn-primary mt-3">Go to Dashboard</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="bi bi-clipboard-check display-4 mb-3"></i>
+                <h3>Templates</h3>
+                <p>Create and manage schedule templates with 2-hour blocks</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="bi bi-calendar-week display-4 mb-3"></i>
+                <h3>Calendars</h3>
+                <p>Generate calendars from templates for different periods</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-body text-center">
+                <i class="bi bi-people display-4 mb-3"></i>
+                <h3>Caregivers</h3>
+                <p>Manage caregivers with hour restrictions and scheduling</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-5">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h3>Features</h3>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item">
+                        <i class="bi bi-check-circle-fill text-success me-2"></i>
+                        Create weekly schedule templates with 2-hour blocks
+                    </li>
+                    <li class="list-group-item">
+                        <i class="bi bi-check-circle-fill text-success me-2"></i>
+                        Assign multiple caregivers to each time slot
+                    </li>
+                    <li class="list-group-item">
+                        <i class="bi bi-check-circle-fill text-success me-2"></i>
+                        Configure checklists for each time slot with tasks
+                    </li>
+                    <li class="list-group-item">
+                        <i class="bi bi-check-circle-fill text-success me-2"></i>
+                        Create calendars from templates for specific time periods
+                    </li>
+                    <li class="list-group-item">
+                        <i class="bi bi-check-circle-fill text-success me-2"></i>
+                        View schedules by caregiver, hourly view, or summary
+                    </li>
+                    <li class="list-group-item">
+                        <i class="bi bi-check-circle-fill text-success me-2"></i>
+                        Track caregiver hours with max 40 hrs/week, 8 hrs/day, 5 days/week limits
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

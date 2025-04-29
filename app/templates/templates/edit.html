@@ -1,0 +1,475 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Template - {{ template.name }} - Awaaz Flexy Timetable{% endblock %}
+
+{% block head %}
+<style>
+    .time-slot {
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 10px;
+        margin-bottom: 10px;
+        background-color: #f8f9fa;
+    }
+    
+    .day-column {
+        padding: 10px;
+        min-height: 150px;
+    }
+    
+    .caregiver-list {
+        margin-top: 10px;
+    }
+    
+    .selected-caregiver {
+        display: inline-block;
+        margin: 2px;
+        padding: 2px 8px;
+        background-color: #2196f3;
+        color: white;
+        border-radius: 16px;
+        font-size: 0.85rem;
+    }
+    
+    .remove-caregiver {
+        cursor: pointer;
+        margin-left: 5px;
+    }
+    
+    .checklist-items {
+        margin-top: 10px;
+        max-height: 150px;
+        overflow-y: auto;
+    }
+    
+    .nav-tabs .nav-link.active {
+        border-color: var(--primary-color);
+        border-bottom-color: transparent;
+        color: var(--primary-color);
+        font-weight: bold;
+    }
+    
+    .slot-container {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    
+    .slot-header {
+        background-color: #f0f0f0;
+        padding: 8px 15px;
+        border-bottom: 1px solid #ddd;
+        font-weight: bold;
+    }
+    
+    .slot-body {
+        padding: 15px;
+    }
+    
+    .template-save-btn {
+        position: fixed;
+        bottom: 70px;
+        right: 20px;
+        z-index: 100;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Add CSRF token hidden input -->
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1>{{ template.name }}</h1>
+        <p class="lead">{{ template.description }}</p>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{{ url_for('list_templates') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Templates
+        </a>
+    </div>
+</div>
+
+<ul class="nav nav-tabs mb-4" id="templateTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="shifts-tab" data-bs-toggle="tab" data-bs-target="#shifts-tab-pane" type="button" role="tab">
+            <i class="bi bi-calendar-week"></i> Assign Caregivers
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="checklist-tab" data-bs-toggle="tab" data-bs-target="#checklist-tab-pane" type="button" role="tab">
+            <i class="bi bi-list-check"></i> Checklist Items
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="templateTabContent">
+    <!-- Shifts Tab -->
+    <div class="tab-pane fade show active" id="shifts-tab-pane" role="tabpanel" aria-labelledby="shifts-tab" tabindex="0">
+        <div class="row">
+            <!-- Days of week headers -->
+            <div class="col-md-12 mb-3">
+                <div class="row">
+                    <div class="col-md text-center"><strong>Monday</strong></div>
+                    <div class="col-md text-center"><strong>Tuesday</strong></div>
+                    <div class="col-md text-center"><strong>Wednesday</strong></div>
+                    <div class="col-md text-center"><strong>Thursday</strong></div>
+                    <div class="col-md text-center"><strong>Friday</strong></div>
+                    <div class="col-md text-center"><strong>Saturday</strong></div>
+                    <div class="col-md text-center"><strong>Sunday</strong></div>
+                </div>
+            </div>
+            
+            <!-- Time slots -->
+            {% for hour in range(0, 24, 2) %}
+            <div class="col-md-12 mb-4">
+                <div class="slot-container">
+                    <div class="slot-header">
+                        {{ "%02d:00"|format(hour) }} - {{ "%02d:00"|format(hour+2) }}
+                    </div>
+                    <div class="slot-body">
+                        <div class="row">
+                            {% for day in range(7) %}
+                            <div class="col-md day-column" id="day-{{ day }}-hour-{{ hour }}">
+                                <div class="selected-caregivers-container" id="selected-caregivers-{{ day }}-{{ hour }}"></div>
+                                <div class="mt-2">
+                                    <select class="form-select form-select-sm caregiver-select" data-day="{{ day }}" data-hour="{{ hour }}">
+                                        <option value="">Add caregiver...</option>
+                                        {% for caregiver in caregivers %}
+                                        <option value="{{ caregiver.id }}">{{ caregiver.name }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    
+    <!-- Checklist Tab -->
+    <div class="tab-pane fade" id="checklist-tab-pane" role="tabpanel" aria-labelledby="checklist-tab" tabindex="0">
+        <div class="row">
+            <!-- Days of week headers -->
+            <div class="col-md-12 mb-3">
+                <div class="row">
+                    <div class="col-md text-center"><strong>Monday</strong></div>
+                    <div class="col-md text-center"><strong>Tuesday</strong></div>
+                    <div class="col-md text-center"><strong>Wednesday</strong></div>
+                    <div class="col-md text-center"><strong>Thursday</strong></div>
+                    <div class="col-md text-center"><strong>Friday</strong></div>
+                    <div class="col-md text-center"><strong>Saturday</strong></div>
+                    <div class="col-md text-center"><strong>Sunday</strong></div>
+                </div>
+            </div>
+            
+            <!-- Time slots -->
+            {% for hour in range(0, 24, 2) %}
+            <div class="col-md-12 mb-4">
+                <div class="slot-container">
+                    <div class="slot-header">
+                        {{ "%02d:00"|format(hour) }} - {{ "%02d:00"|format(hour+2) }}
+                    </div>
+                    <div class="slot-body">
+                        <div class="row">
+                            {% for day in range(7) %}
+                            <div class="col-md day-column" id="checklist-day-{{ day }}-hour-{{ hour }}">
+                                <div class="checklist-items-container" id="checklist-items-{{ day }}-{{ hour }}"></div>
+                                <div class="input-group input-group-sm mt-2">
+                                    <input type="text" class="form-control checklist-input" data-day="{{ day }}" data-hour="{{ hour }}" placeholder="Add task...">
+                                    <button class="btn btn-outline-primary add-checklist-btn" type="button" data-day="{{ day }}" data-hour="{{ hour }}">
+                                        <i class="bi bi-plus"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<button id="saveTemplateBtn" class="btn btn-primary btn-lg template-save-btn">
+    <i class="bi bi-save"></i> Save Template
+</button>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999;">
+    <div class="d-flex justify-content-center align-items-center h-100">
+        <div class="card p-4">
+            <div class="d-flex align-items-center">
+                <div class="spinner-border text-primary me-3" role="status"></div>
+                <div>
+                    <h5 class="mb-0">Saving Template...</h5>
+                    <p class="mb-0">Please wait</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Store template data
+    let templateData = {
+        shifts: [],
+        checklists: []
+    };
+    
+    // Load existing template data
+    loadTemplateData();
+    
+    // Add event listeners
+    setupEventListeners();
+    
+    // Save template button click
+    document.getElementById('saveTemplateBtn').addEventListener('click', saveTemplate);
+    
+    // ----- Functions -----
+    
+    // Load template data from API
+    function loadTemplateData() {
+        // Show loading overlay
+        document.getElementById('loadingOverlay').style.display = 'block';
+        
+        fetch('{{ url_for("get_template_shifts", id=template.id) }}')
+            .then(response => response.json())
+            .then(data => {
+                templateData = data;
+                
+                // Render shifts
+                templateData.shifts.forEach(shift => {
+                    addCaregiverToUI(shift.caregiver_id, shift.day_of_week, shift.start_hour);
+                });
+                
+                // Render checklist items
+                templateData.checklists.forEach(item => {
+                    addChecklistItemToUI(item.description, item.day_of_week, item.start_hour);
+                });
+                
+                // Hide loading overlay
+                document.getElementById('loadingOverlay').style.display = 'none';
+            })
+            .catch(error => {
+                console.error('Error loading template data:', error);
+                document.getElementById('loadingOverlay').style.display = 'none';
+                alert('An error occurred while loading template data.');
+            });
+    }
+    
+    // Set up event listeners
+    function setupEventListeners() {
+        // Caregiver selects
+        document.querySelectorAll('.caregiver-select').forEach(select => {
+            select.addEventListener('change', function() {
+                const caregiverId = this.value;
+                const day = this.getAttribute('data-day');
+                const hour = this.getAttribute('data-hour');
+                
+                if (caregiverId) {
+                    addCaregiverToTemplate(caregiverId, day, hour);
+                    this.value = ''; // Reset select
+                }
+            });
+        });
+        
+        // Add checklist item buttons
+        document.querySelectorAll('.add-checklist-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const day = this.getAttribute('data-day');
+                const hour = this.getAttribute('data-hour');
+                const inputElement = document.querySelector(`.checklist-input[data-day="${day}"][data-hour="${hour}"]`);
+                const description = inputElement.value.trim();
+                
+                if (description) {
+                    addChecklistItemToTemplate(description, day, hour);
+                    inputElement.value = ''; // Clear input
+                }
+            });
+        });
+        
+        // Add enter key support for checklist inputs
+        document.querySelectorAll('.checklist-input').forEach(input => {
+            input.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    const day = this.getAttribute('data-day');
+                    const hour = this.getAttribute('data-hour');
+                    const description = this.value.trim();
+                    
+                    if (description) {
+                        addChecklistItemToTemplate(description, day, hour);
+                        this.value = ''; // Clear input
+                    }
+                    
+                    e.preventDefault();
+                }
+            });
+        });
+    }
+    
+    // Add caregiver to template data and UI
+    function addCaregiverToTemplate(caregiverId, day, hour) {
+        // Check if caregiver is already assigned to this slot
+        const existingShift = templateData.shifts.find(shift => 
+            shift.caregiver_id == caregiverId && 
+            shift.day_of_week == day && 
+            shift.start_hour == hour
+        );
+        
+        if (existingShift) {
+            return; // Caregiver already assigned to this slot
+        }
+        
+        // Add to template data
+        templateData.shifts.push({
+            caregiver_id: caregiverId,
+            day_of_week: parseInt(day),
+            start_hour: parseInt(hour),
+            end_hour: parseInt(hour) + 2
+        });
+        
+        // Add to UI
+        addCaregiverToUI(caregiverId, day, hour);
+    }
+    
+    // Add caregiver to UI
+    function addCaregiverToUI(caregiverId, day, hour) {
+        const caregiverName = getCaregiverName(caregiverId);
+        const container = document.getElementById(`selected-caregivers-${day}-${hour}`);
+        
+        // Create element
+        const caregiverElement = document.createElement('div');
+        caregiverElement.className = 'selected-caregiver';
+        caregiverElement.dataset.caregiverId = caregiverId;
+        caregiverElement.innerHTML = `
+            ${caregiverName}
+            <span class="remove-caregiver" onclick="removeCaregiver(${caregiverId}, ${day}, ${hour})">×</span>
+        `;
+        
+        container.appendChild(caregiverElement);
+    }
+    
+    // Add checklist item to template data and UI
+    function addChecklistItemToTemplate(description, day, hour) {
+        // Add to template data
+        const newItem = {
+            description: description,
+            day_of_week: parseInt(day),
+            start_hour: parseInt(hour),
+            end_hour: parseInt(hour) + 2
+        };
+        
+        templateData.checklists.push(newItem);
+        
+        // Add to UI
+        addChecklistItemToUI(description, day, hour);
+    }
+    
+    // Add checklist item to UI
+    function addChecklistItemToUI(description, day, hour) {
+        const container = document.getElementById(`checklist-items-${day}-${hour}`);
+        
+        // Create element
+        const itemElement = document.createElement('div');
+        itemElement.className = 'checklist-item';
+        itemElement.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center">
+                <div>${description}</div>
+                <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-2" 
+                        onclick="removeChecklistItem('${description}', ${day}, ${hour})">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        `;
+        
+        container.appendChild(itemElement);
+    }
+    
+    // Get caregiver name by ID
+    function getCaregiverName(caregiverId) {
+        const select = document.querySelector('.caregiver-select');
+        const option = select.querySelector(`option[value="${caregiverId}"]`);
+        return option ? option.textContent : 'Unknown';
+    }
+    
+    // Save template data
+    function saveTemplate() {
+        // Show loading overlay
+        document.getElementById('loadingOverlay').style.display = 'block';
+        
+        // Get CSRF token from the hidden input field
+        const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+        
+        fetch('{{ url_for("update_template_shifts", id=template.id) }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(templateData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Template saved successfully!');
+            } else {
+                alert('Failed to save template: ' + (data.error || 'Unknown error'));
+                console.error('Error response:', data);
+            }
+            document.getElementById('loadingOverlay').style.display = 'none';
+        })
+        .catch(error => {
+            console.error('Error saving template:', error);
+            document.getElementById('loadingOverlay').style.display = 'none';
+            alert('An error occurred while saving the template: ' + error.message);
+        });
+    }
+    
+    // Make functions available globally
+    window.removeCaregiver = function(caregiverId, day, hour) {
+        // Remove from template data
+        templateData.shifts = templateData.shifts.filter(shift => 
+            !(shift.caregiver_id == caregiverId && 
+              shift.day_of_week == day && 
+              shift.start_hour == hour)
+        );
+        
+        // Remove from UI
+        const container = document.getElementById(`selected-caregivers-${day}-${hour}`);
+        const element = container.querySelector(`.selected-caregiver[data-caregiver-id="${caregiverId}"]`);
+        if (element) {
+            element.remove();
+        }
+    };
+    
+    window.removeChecklistItem = function(description, day, hour) {
+        // Remove from template data
+        templateData.checklists = templateData.checklists.filter(item => 
+            !(item.description === description && 
+              item.day_of_week == day && 
+              item.start_hour == hour)
+        );
+        
+        // Reload checklist items UI
+        const container = document.getElementById(`checklist-items-${day}-${hour}`);
+        container.innerHTML = '';
+        
+        // Re-add remaining items
+        templateData.checklists
+            .filter(item => item.day_of_week == day && item.start_hour == hour)
+            .forEach(item => {
+                addChecklistItemToUI(item.description, day, hour);
+            });
+    };
+});
+</script>
+{% endblock %} 

@@ -1,0 +1,663 @@
+{% extends "base.html" %}
+
+{% block title %}Reports - {{ calendar.name }} - Awaaz Flexy Timetable{% endblock %}
+
+{% block head %}
+<style>
+    .report-card {
+        margin-bottom: 20px;
+    }
+    
+    .report-title {
+        display: flex;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+    
+    .report-icon {
+        font-size: 1.5rem;
+        margin-right: 10px;
+    }
+    
+    .progress-thin {
+        height: 8px;
+    }
+    
+    .report-table th {
+        background-color: var(--light-color);
+    }
+    
+    .caregiver-limits-warning {
+        background-color: #fff3cd;
+        color: #856404;
+    }
+    
+    .caregiver-limits-danger {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    
+    .timetable-heatmap {
+        max-width: 100%;
+        overflow-x: auto;
+    }
+    
+    .heatmap-grid {
+        display: grid;
+        grid-template-columns: 100px repeat(7, minmax(100px, 1fr));
+        gap: 2px;
+        min-width: 800px;
+    }
+    
+    .heatmap-header {
+        background-color: var(--primary-color);
+        color: white;
+        padding: 8px;
+        text-align: center;
+        font-weight: bold;
+        border-radius: 4px;
+    }
+    
+    .heatmap-time {
+        background-color: var(--light-color);
+        padding: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        border-radius: 4px;
+    }
+    
+    .heatmap-cell {
+        border-radius: 4px;
+        padding: 8px;
+        text-align: center;
+        font-weight: bold;
+        color: white;
+    }
+    
+    .heat-0 {
+        background-color: #e9ecef;
+        color: #495057;
+    }
+    
+    .heat-1 {
+        background-color: #d1e7dd;
+        color: #0f5132;
+    }
+    
+    .heat-2 {
+        background-color: #a3cfbb;
+        color: #0f5132;
+    }
+    
+    .heat-3 {
+        background-color: #75c2a3;
+        color: white;
+    }
+    
+    .heat-4 {
+        background-color: #5cb85c;
+        color: white;
+    }
+    
+    .heat-5 {
+        background-color: #3f9d45;
+        color: white;
+    }
+    
+    .progress-container {
+        display: flex;
+        align-items: center;
+        margin-top: 4px;
+    }
+    
+    .progress-label {
+        min-width: 50px;
+        text-align: right;
+        margin-right: 10px;
+    }
+    
+    .progress {
+        flex-grow: 1;
+    }
+    
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+        
+        .card {
+            break-inside: avoid;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1>Reports: {{ calendar.name }}</h1>
+        <p class="lead">Performance metrics and utilization reports</p>
+        <p>
+            <strong>Start Date:</strong> {{ calendar.start_date.strftime('%Y-%m-%d') }} | 
+            <strong>Template:</strong> {{ calendar.template.name }}
+        </p>
+    </div>
+    <div class="col-md-4 text-end no-print">
+        <button class="btn btn-outline-primary me-2" onclick="window.print()">
+            <i class="bi bi-printer"></i> Print
+        </button>
+        <a href="{{ url_for('view_calendar', id=calendar.id) }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Calendar
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Caregiver Hours Report -->
+        <div class="card report-card">
+            <div class="card-header">
+                <div class="report-title">
+                    <i class="bi bi-people-fill report-icon"></i>
+                    <h3 class="mb-0">Caregiver Hours</h3>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="caregiverHoursContainer">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <p class="mt-2">Loading data...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Coverage Heatmap -->
+        <div class="card report-card">
+            <div class="card-header">
+                <div class="report-title">
+                    <i class="bi bi-grid-3x3 report-icon"></i>
+                    <h3 class="mb-0">Coverage Heatmap</h3>
+                </div>
+            </div>
+            <div class="card-body">
+                <p>Number of caregivers assigned to each time slot:</p>
+                <div class="timetable-heatmap">
+                    <div class="heatmap-grid" id="heatmapContainer">
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status"></div>
+                            <p class="mt-2">Loading data...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Cost Analysis Report (NEW) -->
+        <div class="card report-card">
+            <div class="card-header">
+                <div class="report-title">
+                    <i class="bi bi-cash-stack report-icon"></i>
+                    <h3 class="mb-0">Cost Analysis</h3>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="costAnalysisContainer">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <p class="mt-2">Loading data...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <!-- Summary Card -->
+        <div class="card report-card">
+            <div class="card-header">
+                <div class="report-title">
+                    <i class="bi bi-clipboard-data report-icon"></i>
+                    <h3 class="mb-0">Summary</h3>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="summaryContainer">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <p class="mt-2">Loading data...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Daily Distribution -->
+        <div class="card report-card">
+            <div class="card-header">
+                <div class="report-title">
+                    <i class="bi bi-calendar-week report-icon"></i>
+                    <h3 class="mb-0">Daily Distribution</h3>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="dailyDistributionContainer">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <p class="mt-2">Loading data...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Load report data
+    loadReportData();
+    
+    // ----- Functions -----
+    
+    // Load calendar report data from API
+    function loadReportData() {
+        fetch('{{ url_for("get_calendar_reports", id=calendar.id) }}')
+            .then(response => response.json())
+            .then(data => {
+                // Render reports
+                renderCaregiverHoursReport(data.caregiver_hours);
+                renderHeatmap(data.hours_by_time);
+                renderSummary(data.caregiver_hours, data.total_cost);
+                renderDailyDistribution(data.hours_by_time);
+                renderCostAnalysis(data.caregiver_hours, data.total_cost);
+            })
+            .catch(error => {
+                console.error('Error loading report data:', error);
+                alert('An error occurred while loading report data.');
+            });
+    }
+    
+    // Render caregiver hours report
+    function renderCaregiverHoursReport(caregiverHours) {
+        const container = document.getElementById('caregiverHoursContainer');
+        
+        // If no data, show message
+        if (Object.keys(caregiverHours).length === 0) {
+            container.innerHTML = '<div class="alert alert-info">No caregiver hours data available.</div>';
+            return;
+        }
+        
+        // Create table
+        let html = `
+            <div class="table-responsive">
+                <table class="table table-bordered report-table">
+                    <thead>
+                        <tr>
+                            <th>Caregiver</th>
+                            <th>Mon</th>
+                            <th>Tue</th>
+                            <th>Wed</th>
+                            <th>Thu</th>
+                            <th>Fri</th>
+                            <th>Sat</th>
+                            <th>Sun</th>
+                            <th>Total</th>
+                            <th>Rate</th>
+                            <th>Cost</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        // Add rows for each caregiver
+        for (const caregiverId in caregiverHours) {
+            const caregiver = caregiverHours[caregiverId];
+            const totalHours = caregiver.total_hours;
+            
+            // Calculate working days
+            const workingDays = Object.values(caregiver.days).filter(hours => hours > 0).length;
+            
+            // Determine status based on limits
+            let statusClass = '';
+            let statusText = 'OK';
+            
+            if (totalHours > 40) {
+                statusClass = 'caregiver-limits-danger';
+                statusText = 'Over 40hr/week';
+            } else if (workingDays > 5) {
+                statusClass = 'caregiver-limits-danger';
+                statusText = 'Over 5 days/week';
+            } else if (Object.values(caregiver.days).some(hours => hours > 8)) {
+                statusClass = 'caregiver-limits-warning';
+                statusText = 'Over 8hr/day';
+            }
+            
+            // Format rate and cost
+            const formattedRate = caregiver.rate ? `$${caregiver.rate.toFixed(2)}` : '-';
+            const formattedCost = caregiver.cost ? `$${caregiver.cost.toFixed(2)}` : '-';
+            
+            html += `
+                <tr class="${statusClass}">
+                    <td>${caregiver.name}</td>
+                    <td>${caregiver.days[0] || '-'}</td>
+                    <td>${caregiver.days[1] || '-'}</td>
+                    <td>${caregiver.days[2] || '-'}</td>
+                    <td>${caregiver.days[3] || '-'}</td>
+                    <td>${caregiver.days[4] || '-'}</td>
+                    <td>${caregiver.days[5] || '-'}</td>
+                    <td>${caregiver.days[6] || '-'}</td>
+                    <td><strong>${totalHours}</strong></td>
+                    <td>${formattedRate}</td>
+                    <td><strong>${formattedCost}</strong></td>
+                    <td>${statusText}</td>
+                </tr>
+            `;
+        }
+        
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+        
+        container.innerHTML = html;
+    }
+    
+    // Render heatmap
+    function renderHeatmap(hoursByTime) {
+        const container = document.getElementById('heatmapContainer');
+        
+        // Create heatmap grid
+        let html = `
+            <div class="heatmap-header">Time / Day</div>
+            <div class="heatmap-header">Monday</div>
+            <div class="heatmap-header">Tuesday</div>
+            <div class="heatmap-header">Wednesday</div>
+            <div class="heatmap-header">Thursday</div>
+            <div class="heatmap-header">Friday</div>
+            <div class="heatmap-header">Saturday</div>
+            <div class="heatmap-header">Sunday</div>
+        `;
+        
+        // Add rows for each time slot
+        for (let hour = 0; hour < 24; hour += 2) {
+            html += `<div class="heatmap-time">${hour}:00<br>${hour+2}:00</div>`;
+            
+            // Add cells for each day
+            for (let day = 0; day < 7; day++) {
+                const count = hoursByTime[day]?.[hour]?.count || 0;
+                // Heat level 0-5 based on count
+                const heat = Math.min(5, count);
+                
+                html += `<div class="heatmap-cell heat-${heat}">${count}</div>`;
+            }
+        }
+        
+        container.innerHTML = html;
+    }
+    
+    // Render summary statistics
+    function renderSummary(caregiverHours, totalCost) {
+        const container = document.getElementById('summaryContainer');
+        
+        // Calculate total caregivers and hours
+        const totalCaregivers = Object.keys(caregiverHours).length;
+        let totalHours = 0;
+        let caregiverLimitViolations = 0;
+        
+        for (const caregiverId in caregiverHours) {
+            const caregiver = caregiverHours[caregiverId];
+            totalHours += caregiver.total_hours;
+            
+            // Check for limit violations
+            const workingDays = Object.values(caregiver.days).filter(hours => hours > 0).length;
+            
+            if (caregiver.total_hours > 40 || 
+                workingDays > 5 || 
+                Object.values(caregiver.days).some(hours => hours > 8)) {
+                caregiverLimitViolations++;
+            }
+        }
+        
+        // Calculate coverage
+        const totalSlots = 12 * 7; // 12 2-hour slots per day, 7 days
+        const coveredSlots = totalHours / 2; // Each 2-hour slot counts as 1
+        const coveragePercentage = Math.round((coveredSlots / totalSlots) * 100);
+        
+        // Format total cost
+        const formattedTotalCost = totalCost ? `$${totalCost.toFixed(2)}` : '$0.00';
+        
+        html = `
+            <div class="mb-4">
+                <h5>Total Caregivers</h5>
+                <h2>${totalCaregivers}</h2>
+            </div>
+            
+            <div class="mb-4">
+                <h5>Total Hours Scheduled</h5>
+                <h2>${totalHours}</h2>
+            </div>
+            
+            <div class="mb-4">
+                <h5>Total Cost</h5>
+                <h2>${formattedTotalCost}</h2>
+            </div>
+            
+            <div class="mb-4">
+                <h5>Schedule Coverage</h5>
+                <h2>${coveragePercentage}%</h2>
+                <div class="progress-container">
+                    <div class="progress-label">${coveragePercentage}%</div>
+                    <div class="progress progress-thin">
+                        <div class="progress-bar" role="progressbar" style="width: ${coveragePercentage}%"></div>
+                    </div>
+                </div>
+                <small class="text-muted">Percentage of time slots with at least one caregiver</small>
+            </div>
+            
+            <div class="mb-4">
+                <h5>Limit Violations</h5>
+                <h2>${caregiverLimitViolations}</h2>
+                <small class="text-muted">Caregivers exceeding work hour limits</small>
+            </div>
+        `;
+        
+        container.innerHTML = html;
+    }
+    
+    // Render daily distribution
+    function renderDailyDistribution(hoursByTime) {
+        const container = document.getElementById('dailyDistributionContainer');
+        
+        // Calculate total caregivers per day
+        const dailyTotals = [0, 0, 0, 0, 0, 0, 0];
+        const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        
+        for (let day = 0; day < 7; day++) {
+            for (let hour = 0; hour < 24; hour += 2) {
+                dailyTotals[day] += hoursByTime[day]?.[hour]?.count || 0;
+            }
+        }
+        
+        // Find maximum for percentage calculation
+        const maxTotal = Math.max(...dailyTotals);
+        
+        let html = '';
+        
+        // Create progress bars for each day
+        for (let day = 0; day < 7; day++) {
+            const percentage = maxTotal ? Math.round((dailyTotals[day] / maxTotal) * 100) : 0;
+            
+            html += `
+                <h5>${dayNames[day]}</h5>
+                <div class="progress-container">
+                    <div class="progress-label">${dailyTotals[day]}</div>
+                    <div class="progress progress-thin">
+                        <div class="progress-bar" role="progressbar" style="width: ${percentage}%"></div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        container.innerHTML = html;
+    }
+    
+    // Render cost analysis
+    function renderCostAnalysis(caregiverHours, totalCost) {
+        const container = document.getElementById('costAnalysisContainer');
+        
+        // If no data, show message
+        if (Object.keys(caregiverHours).length === 0) {
+            container.innerHTML = '<div class="alert alert-info">No cost data available.</div>';
+            return;
+        }
+        
+        // Calculate daily totals for both detailed tables
+        const dailyRegularHours = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0};
+        const dailyOvertimeHours = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0};
+        const dailyCostByDay = {0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0};
+        const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        
+        for (const caregiverId in caregiverHours) {
+            const caregiver = caregiverHours[caregiverId];
+            const rate = caregiver.rate || 0;
+            
+            for (let day = 0; day < 7; day++) {
+                const regularHours = caregiver.regular_hours?.[day] || 0;
+                const overtimeHours = caregiver.overtime_hours?.[day] || 0;
+                
+                dailyRegularHours[day] += regularHours;
+                dailyOvertimeHours[day] += overtimeHours;
+                
+                const dayCost = (regularHours * rate) + (overtimeHours * rate * 1.5);
+                dailyCostByDay[day] += dayCost;
+            }
+        }
+        
+        // Format the total cost
+        const formattedTotalCost = totalCost ? `$${totalCost.toFixed(2)}` : '$0.00';
+        
+        // Convert to array for sorting
+        const caregiversArray = Object.values(caregiverHours);
+        
+        // Sort by cost (highest first)
+        caregiversArray.sort((a, b) => b.cost - a.cost);
+        
+        // Add top 5 caregivers (or all if less than 5)
+        const topCaregivers = caregiversArray.slice(0, 5);
+        
+        let html = `
+            <div class="mb-4">
+                <h4>Total Cost: ${formattedTotalCost}</h4>
+                <p>Overtime calculated at 1.5x rate for hours exceeding 10 per day</p>
+            </div>
+            
+            <div class="mb-4">
+                <h5>Detailed Cost Breakdown</h5>
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Caregiver</th>
+                                <th>Regular Hours</th>
+                                <th>Regular Cost</th>
+                                <th>Overtime Hours</th>
+                                <th>Overtime Cost</th>
+                                <th>Total Cost</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+        `;
+        
+        // Add rows for each caregiver with overtime details
+        for (const caregiver of topCaregivers) {
+            // Calculate regular and overtime totals
+            const regularHours = Object.values(caregiver.regular_hours || {}).reduce((sum, h) => sum + h, 0);
+            const overtimeHours = Object.values(caregiver.overtime_hours || {}).reduce((sum, h) => sum + h, 0);
+            
+            // Calculate costs
+            const rate = caregiver.rate || 0;
+            const regularCost = regularHours * rate;
+            const overtimeCost = overtimeHours * rate * 1.5;
+            
+            // Format values
+            const formattedRegularHours = regularHours;
+            const formattedOvertimeHours = overtimeHours;
+            const formattedRegularCost = `$${regularCost.toFixed(2)}`;
+            const formattedOvertimeCost = `$${overtimeCost.toFixed(2)}`;
+            const formattedTotalCost = caregiver.cost ? `$${caregiver.cost.toFixed(2)}` : '-';
+            
+            html += `
+                <tr>
+                    <td>${caregiver.name}</td>
+                    <td>${formattedRegularHours}</td>
+                    <td>${formattedRegularCost}</td>
+                    <td>${formattedOvertimeHours}</td>
+                    <td>${formattedOvertimeCost}</td>
+                    <td><strong>${formattedTotalCost}</strong></td>
+                </tr>
+            `;
+        }
+
+        html += `
+                </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="mb-4">
+            <h5>Daily Cost Breakdown</h5>
+            <div class="table-responsive">
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Day</th>
+                            <th>Regular Hours</th>
+                            <th>Overtime Hours</th>
+                            <th>Daily Cost</th>
+                            <th>Percentage</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            // Add rows for each day
+            for (let day = 0; day < 7; day++) {
+                const dayCost = dailyCostByDay[day];
+                const percentage = totalCost ? Math.round((dayCost / totalCost) * 100) : 0;
+                
+                html += `
+                    <tr>
+                        <td>${dayNames[day]}</td>
+                        <td>${dailyRegularHours[day]}</td>
+                        <td>${dailyOvertimeHours[day]}</td>
+                        <td>$${dayCost.toFixed(2)}</td>
+                        <td>
+                            <div class="progress">
+                                <div class="progress-bar" role="progressbar" style="width: ${percentage}%" 
+                                    aria-valuenow="${percentage}" aria-valuemin="0" aria-valuemax="100">
+                                    ${percentage}%
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }
+            
+            html += `
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        `;
+        
+        container.innerHTML = html;
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}Templates - Awaaz Flexy Timetable{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1>Schedule Templates</h1>
+        <p class="lead">Manage your weekly schedule templates</p>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{{ url_for('new_template') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> New Template
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="mb-0">Your Templates</h3>
+            </div>
+            <div class="card-body">
+                {% if templates %}
+                <div class="row">
+                    {% for template in templates %}
+                    <div class="col-md-6 col-lg-4 mb-4">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">{{ template.name }}</h5>
+                                <p class="card-text">{{ template.description }}</p>
+                                <p class="text-muted small">Created: {{ template.created_at.strftime('%Y-%m-%d') }}</p>
+                            </div>
+                            <div class="card-footer bg-transparent">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <a href="{{ url_for('edit_template', id=template.id) }}" class="btn btn-sm btn-primary">
+                                            <i class="bi bi-pencil"></i> Edit
+                                        </a>
+                                        <button type="button" class="btn btn-sm btn-danger delete-template-btn" 
+                                                data-bs-toggle="modal" data-bs-target="#deleteTemplateModal"
+                                                data-template-id="{{ template.id }}" 
+                                                data-template-name="{{ template.name }}">
+                                            <i class="bi bi-trash"></i> Delete
+                                        </button>
+                                    </div>
+                                    <a href="{{ url_for('new_calendar') }}?template_id={{ template.id }}" class="btn btn-sm btn-secondary">
+                                        <i class="bi bi-calendar-plus"></i> Create Calendar
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="bi bi-clipboard-x display-4 text-muted mb-3"></i>
+                    <p>No templates found. Create your first template to get started.</p>
+                    <a href="{{ url_for('new_template') }}" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Create Template
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Template Modal -->
+<div class="modal fade" id="deleteTemplateModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the template "<span id="template-name-placeholder"></span>"?</p>
+                <p class="text-danger">This action cannot be undone and will delete all shifts and checklist items associated with this template.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="delete-template-form" method="POST" action="">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <button type="submit" class="btn btn-danger">Delete Template</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Setup delete template modal
+    document.querySelectorAll('.delete-template-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const templateId = this.getAttribute('data-template-id');
+            const templateName = this.getAttribute('data-template-name');
+            
+            document.getElementById('template-name-placeholder').textContent = templateName;
+            document.getElementById('delete-template-form').action = "{{ url_for('delete_template', id=0) }}".replace('0', templateId);
+        });
+    });
+});
+</script>
+{% endblock %} 

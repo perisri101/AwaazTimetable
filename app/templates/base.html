@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Awaaz Flexy Timetable{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary-color: #3f51b5;
+            --secondary-color: #ff9800;
+            --success-color: #4caf50;
+            --danger-color: #f44336;
+            --warning-color: #ff9800;
+            --info-color: #2196f3;
+            --light-color: #f8f9fa;
+            --dark-color: #343a40;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+
+        .navbar-custom {
+            background-color: var(--primary-color);
+        }
+
+        .navbar-custom .navbar-brand,
+        .navbar-custom .nav-link {
+            color: white;
+        }
+
+        .navbar-custom .nav-link:hover {
+            color: var(--secondary-color);
+        }
+
+        .main-content {
+            margin-top: 20px;
+            margin-bottom: 100px;
+        }
+
+        .card {
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .card-header {
+            background-color: var(--primary-color);
+            color: white;
+            border-radius: 8px 8px 0 0 !important;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
+        .btn-primary:hover {
+            background-color: #303f9f;
+            border-color: #303f9f;
+        }
+
+        .btn-secondary {
+            background-color: var(--secondary-color);
+            border-color: var(--secondary-color);
+        }
+
+        .btn-secondary:hover {
+            background-color: #e68900;
+            border-color: #e68900;
+        }
+
+        .timetable-grid {
+            display: grid;
+            grid-template-columns: auto repeat(7, 1fr);
+            gap: 2px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            overflow: auto;
+        }
+
+        .timetable-cell {
+            padding: 10px;
+            border: 1px solid #ddd;
+            background-color: white;
+            min-height: 80px;
+        }
+
+        .timetable-header {
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: bold;
+            text-align: center;
+            padding: 10px;
+        }
+
+        .time-label {
+            background-color: var(--light-color);
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .caregiver-chip {
+            display: inline-block;
+            padding: 2px 8px;
+            margin: 2px;
+            border-radius: 16px;
+            background-color: var(--info-color);
+            color: white;
+            font-size: 0.8rem;
+        }
+
+        .checklist-item {
+            margin-bottom: 5px;
+            padding: 5px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+        
+        footer {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 20px 0;
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+        }
+    </style>
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark navbar-custom">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('index') }}">
+                <i class="bi bi-calendar3"></i> Awaaz Flexy Timetable
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    {% if current_user.is_authenticated %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('list_templates') }}">Templates</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('list_calendars') }}">Calendars</a>
+                    </li>
+                    {% if current_user.is_admin %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('manage_caregivers') }}">Manage Caregivers</a>
+                    </li>
+                    {% endif %}
+                    {% endif %}
+                </ul>
+                <ul class="navbar-nav ms-auto">
+                    {% if current_user.is_authenticated %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="bi bi-person-circle"></i> {{ current_user.username }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="{{ url_for('logout') }}">Logout</a></li>
+                        </ul>
+                    </li>
+                    {% else %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('login') }}">Login</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container main-content">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category or 'info' }} alert-dismissible fade show">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        {% block content %}{% endblock %}
+    </div>
+
+    <footer>
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5>Awaaz Flexy Timetable</h5>
+                    <p>A flexible 24/7 scheduling system for caregivers</p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p>&copy; 2023 Awaaz Flexy Timetable</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/min/moment.min.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html> 

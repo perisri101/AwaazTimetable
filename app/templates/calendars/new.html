@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block title %}New Calendar - Awaaz Flexy Timetable{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <h1>Create New Calendar</h1>
+        <p class="lead">Create a new calendar from a template</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="mb-0">Calendar Details</h3>
+            </div>
+            <div class="card-body">
+                <form id="createCalendarForm">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Calendar Name</label>
+                        <input type="text" class="form-control" id="name" required placeholder="Enter calendar name">
+                        <div class="invalid-feedback">Please provide a name for the calendar.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description (Optional)</label>
+                        <textarea class="form-control" id="description" rows="3" placeholder="Enter a description of this calendar"></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="template" class="form-label">Template</label>
+                        <select class="form-select" id="template" required>
+                            <option value="">Select a template</option>
+                            {% for template in templates %}
+                            <option value="{{ template.id }}" {% if request.args.get('template_id')|int == template.id %}selected{% endif %}>
+                                {{ template.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="invalid-feedback">Please select a template.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="start_date" class="form-label">Start Date</label>
+                        <input type="text" class="form-control" id="start_date" required placeholder="Select start date">
+                        <div class="invalid-feedback">Please select a start date.</div>
+                        <small class="form-text text-muted">This will set Monday of the selected week as the first day of the calendar.</small>
+                    </div>
+                    
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle-fill me-2"></i>
+                        The calendar will be created based on the selected template. You can view and modify it after creation.
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('list_calendars') }}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> Back to Calendars
+                        </a>
+                        <button type="submit" class="btn btn-primary" id="createCalendarBtn">
+                            <i class="bi bi-save"></i> Create Calendar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div id="loadingOverlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999;">
+    <div class="d-flex justify-content-center align-items-center h-100">
+        <div class="card p-4">
+            <div class="d-flex align-items-center">
+                <div class="spinner-border text-primary me-3" role="status"></div>
+                <div>
+                    <h5 class="mb-0">Creating Calendar...</h5>
+                    <p class="mb-0">Please wait</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize date picker
+    flatpickr("#start_date", {
+        dateFormat: "Y-m-d",
+        defaultDate: new Date(),
+        onChange: function(selectedDates, dateStr, instance) {
+            // Ensure the date is a Monday
+            const selected = selectedDates[0];
+            const dayOfWeek = selected.getDay(); // 0 = Sunday, 1 = Monday, etc.
+            
+            // If not Monday (1), adjust to the nearest Monday
+            if (dayOfWeek !== 1) {
+                const daysToMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek; // If Sunday, +1 day, otherwise (8 - dayOfWeek)
+                const monday = new Date(selected);
+                monday.setDate(selected.getDate() + daysToMonday);
+                instance.setDate(monday);
+            }
+        }
+    });
+    
+    // Form submission
+    document.getElementById('createCalendarForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Validate form
+        if (!validateForm()) {
+            return;
+        }
+        
+        // Show loading overlay
+        document.getElementById('loadingOverlay').style.display = 'block';
+        
+        // Get form data
+        const calendarData = {
+            name: document.getElementById('name').value,
+            description: document.getElementById('description').value,
+            template_id: document.getElementById('template').value,
+            start_date: document.getElementById('start_date').value
+        };
+        
+        // Create calendar
+        fetch('{{ url_for("create_calendar") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify(calendarData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Redirect to calendar view
+                window.location.href = '{{ url_for("view_calendar", id=0) }}'.replace('0', data.calendar_id);
+            } else {
+                alert('Failed to create calendar: ' + (data.message || 'Unknown error'));
+                document.getElementById('loadingOverlay').style.display = 'none';
+            }
+        })
+        .catch(error => {
+            console.error('Error creating calendar:', error);
+            alert('An error occurred while creating the calendar.');
+            document.getElementById('loadingOverlay').style.display = 'none';
+        });
+    });
+    
+    // Validate form
+    function validateForm() {
+        let isValid = true;
+        
+        // Validate name
+        const nameInput = document.getElementById('name');
+        if (!nameInput.value.trim()) {
+            nameInput.classList.add('is-invalid');
+            isValid = false;
+        } else {
+            nameInput.classList.remove('is-invalid');
+        }
+        
+        // Validate template
+        const templateInput = document.getElementById('template');
+        if (!templateInput.value) {
+            templateInput.classList.add('is-invalid');
+            isValid = false;
+        } else {
+            templateInput.classList.remove('is-invalid');
+        }
+        
+        // Validate start date
+        const startDateInput = document.getElementById('start_date');
+        if (!startDateInput.value) {
+            startDateInput.classList.add('is-invalid');
+            isValid = false;
+        } else {
+            startDateInput.classList.remove('is-invalid');
+        }
+        
+        return isValid;
+    }
+});
+</script>
+{% endblock %} 
