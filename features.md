@@ -1,0 +1,22 @@
+# Features
+
+- **Create weekly schedule templates with 2-hour blocks**
+- **Assign multiple caregivers to each time slot**
+- **Configure checklists for each time slot with tasks**
+- **Create calendars from templates for specific time periods**
+- **View schedules by caregiver, hourly view, or summary**
+- **Track caregiver hours with max 40 hrs/week, 8 hrs/day, 5 days/week limits**
+- **Overtime calculation at 1.5x rate for hours above 40 per week**
+- **Mobile-responsive design for access on any device**
+- **Customizable shift durations (2-hour blocks or custom lengths)**
+- **Real-time availability tracking for caregivers**
+- **Conflict detection when scheduling overlapping shifts**
+- **Notification system for schedule changes**
+- **Export schedules to PDF or calendar formats**
+- **Role-based access control for administrators and caregivers**
+- **Dashboard with schedule overview and alerts**
+- **Reporting tools for hours worked and schedule adherence**
+- **Template preview functionality with multiple views for iterative refinement**
+- **Master list of predefined activities/tasks for checklist creation**
+- **Category-based organization of activity checklists by groups**
+- **Drag-and-drop interface for building and modifying checklists** 

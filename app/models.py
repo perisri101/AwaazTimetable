@@ -124,6 +124,42 @@ class Shift(db.Model):
             'caregiver_id': self.caregiver_id
         }
 
+class ActivityCategory(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text)
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    activities = db.relationship('Activity', backref='category', lazy=True)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'created_by': self.created_by,
+            'created_at': self.created_at.isoformat()
+        }
+
+class Activity(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text)
+    category_id = db.Column(db.Integer, db.ForeignKey('activity_category.id'), nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'category_id': self.category_id,
+            'created_by': self.created_by,
+            'created_at': self.created_at.isoformat()
+        }
+
 class ChecklistItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     template_id = db.Column(db.Integer, db.ForeignKey('template.id'))
@@ -133,7 +169,10 @@ class ChecklistItem(db.Model):
     end_hour = db.Column(db.Integer, nullable=False)     # 2-24 (even hours only for 2hr blocks)
     description = db.Column(db.Text, nullable=False)
     completed = db.Column(db.Boolean, default=False)
+    activity_id = db.Column(db.Integer, db.ForeignKey('activity.id'), nullable=True)  # Link to master activity
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    activity = db.relationship('Activity', backref='checklist_items', lazy=True)
     
     def to_dict(self):
         return {
@@ -144,5 +183,6 @@ class ChecklistItem(db.Model):
             'start_hour': self.start_hour,
             'end_hour': self.end_hour,
             'description': self.description,
-            'completed': self.completed
+            'completed': self.completed,
+            'activity_id': self.activity_id
         } 

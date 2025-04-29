@@ -4,12 +4,21 @@ from flask_wtf.csrf import CSRFProtect
 from datetime import datetime
 import os
 import json
-from models import db, User, Caregiver, Template, Calendar, Shift, ChecklistItem
+from models import db, User, Caregiver, Template, Calendar, Shift, ChecklistItem, ActivityCategory, Activity
 from forms import LoginForm, UserForm, CaregiverForm, TemplateForm
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-for-awaaz-flexy-timetable')
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///scheduler.db'
+
+# Use environment variable for database URL or default to SQLite
+database_url = os.environ.get('DATABASE_URL')
+if database_url and database_url.startswith('postgres://'):
+    # Heroku Postgres uses 'postgres://' but SQLAlchemy expects 'postgresql://'
+    database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+else:
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///scheduler.db')
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Initialize extensions
@@ -27,7 +36,7 @@ def load_user(user_id):
 # Initialize database and create admin user
 def create_tables():
     with app.app_context():
-        # Check if we need to add the rate column to existing database
+        # Check if we need to add columns to existing database
         import sqlite3
         import os
         
@@ -37,7 +46,7 @@ def create_tables():
                 conn = sqlite3.connect(db_path)
                 cursor = conn.cursor()
                 
-                # Check if rate column exists
+                # Check if rate column exists in caregiver table
                 cursor.execute("PRAGMA table_info(caregiver)")
                 columns = cursor.fetchall()
                 column_names = [column[1] for column in columns]
@@ -48,9 +57,20 @@ def create_tables():
                     conn.commit()
                     print("Rate column added successfully!")
                 
+                # Check if activity_id column exists in checklist_item table
+                cursor.execute("PRAGMA table_info(checklist_item)")
+                columns = cursor.fetchall()
+                column_names = [column[1] for column in columns]
+                
+                if 'activity_id' not in column_names:
+                    print("Adding activity_id column to checklist_item table...")
+                    cursor.execute("ALTER TABLE checklist_item ADD COLUMN activity_id INTEGER")
+                    conn.commit()
+                    print("activity_id column added successfully!")
+                
                 conn.close()
             except Exception as e:
-                print(f"Error checking/adding rate column: {str(e)}")
+                print(f"Error checking/adding columns: {str(e)}")
                 # If we can't modify the existing table, recreate the database
                 try:
                     os.remove(db_path)
@@ -300,7 +320,8 @@ def update_template_shifts(id):
                 day_of_week=item_data['day_of_week'],
                 start_hour=item_data['start_hour'],
                 end_hour=item_data['end_hour'],
-                description=item_data['description']
+                description=item_data['description'],
+                activity_id=item_data.get('activity_id')  # Include activity_id if provided
             )
             db.session.add(item)
         
@@ -333,6 +354,79 @@ def delete_template(id):
     
     flash('Template deleted successfully', 'success')
     return redirect(url_for('list_templates'))
+
+@app.route('/templates/preview/<int:id>')
+@login_required
+def preview_template(id):
+    template = Template.query.get_or_404(id)
+    caregivers = Caregiver.query.all()
+    return render_template('templates/preview.html', template=template, caregivers=caregivers)
+
+@app.route('/api/templates/<int:id>/preview/caregiver/<int:caregiver_id>')
+@login_required
+def preview_template_by_caregiver(id, caregiver_id):
+    template = Template.query.get_or_404(id)
+    caregiver = Caregiver.query.get_or_404(caregiver_id)
+    
+    # Get all shifts for this caregiver in the template
+    shifts = Shift.query.filter_by(template_id=id, caregiver_id=caregiver_id).all()
+    
+    return jsonify({
+        'success': True,
+        'template': template.to_dict(),
+        'caregiver': caregiver.to_dict(),
+        'shifts': [shift.to_dict() for shift in shifts]
+    })
+
+@app.route('/api/templates/<int:id>/preview/day/<int:day>')
+@login_required
+def preview_template_by_day(id, day):
+    template = Template.query.get_or_404(id)
+    
+    # Get all shifts for this day in the template
+    shifts = Shift.query.filter_by(template_id=id, day_of_week=day).all()
+    
+    # Get all checklist items for this day
+    checklist_items = ChecklistItem.query.filter_by(template_id=id, day_of_week=day).all()
+    
+    # Get all caregivers assigned to this day
+    caregiver_ids = set(shift.caregiver_id for shift in shifts)
+    caregivers = Caregiver.query.filter(Caregiver.id.in_(caregiver_ids)).all()
+    
+    return jsonify({
+        'success': True,
+        'template': template.to_dict(),
+        'day': day,
+        'shifts': [shift.to_dict() for shift in shifts],
+        'checklist_items': [item.to_dict() for item in checklist_items],
+        'caregivers': [caregiver.to_dict() for caregiver in caregivers]
+    })
+
+@app.route('/api/templates/<int:id>/preview/hour/<int:hour>')
+@login_required
+def preview_template_by_hour(id, hour):
+    template = Template.query.get_or_404(id)
+    
+    # Get all shifts for this hour in the template
+    shifts = Shift.query.filter_by(template_id=id).filter(Shift.start_hour <= hour, Shift.end_hour > hour).all()
+    
+    # Get all checklist items for this hour
+    checklist_items = ChecklistItem.query.filter_by(template_id=id).filter(
+        ChecklistItem.start_hour <= hour, ChecklistItem.end_hour > hour
+    ).all()
+    
+    # Get all caregivers assigned to this hour
+    caregiver_ids = set(shift.caregiver_id for shift in shifts)
+    caregivers = Caregiver.query.filter(Caregiver.id.in_(caregiver_ids)).all()
+    
+    return jsonify({
+        'success': True,
+        'template': template.to_dict(),
+        'hour': hour,
+        'shifts': [shift.to_dict() for shift in shifts],
+        'checklist_items': [item.to_dict() for item in checklist_items],
+        'caregivers': [caregiver.to_dict() for caregiver in caregivers]
+    })
 
 # Calendar routes
 @app.route('/calendars')
@@ -500,6 +594,196 @@ def delete_calendar(id):
     
     flash('Calendar deleted successfully', 'success')
     return redirect(url_for('list_calendars'))
+
+# Activity Category Management
+@app.route('/manage/activity-categories')
+@login_required
+def manage_activity_categories():
+    if not current_user.is_admin:
+        flash('Access denied')
+        return redirect(url_for('dashboard'))
+    
+    categories = ActivityCategory.query.all()
+    return render_template('manage_activity_categories.html', categories=categories)
+
+@app.route('/api/activity-categories', methods=['GET'])
+@login_required
+def get_activity_categories():
+    categories = ActivityCategory.query.all()
+    return jsonify({
+        'success': True, 
+        'categories': [category.to_dict() for category in categories]
+    })
+
+@app.route('/api/activity-categories', methods=['POST'])
+@login_required
+def add_activity_category():
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'message': 'Access denied'}), 403
+    
+    data = request.json
+    
+    if not data.get('name'):
+        return jsonify({'success': False, 'errors': {'name': ['Name is required']}}), 400
+    
+    category = ActivityCategory(
+        name=data.get('name'),
+        description=data.get('description', ''),
+        created_by=current_user.id
+    )
+    
+    db.session.add(category)
+    db.session.commit()
+    
+    return jsonify({'success': True, 'category': category.to_dict()})
+
+@app.route('/api/activity-categories/<int:id>', methods=['PUT'])
+@login_required
+def update_activity_category(id):
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'message': 'Access denied'}), 403
+    
+    category = ActivityCategory.query.get_or_404(id)
+    data = request.json
+    
+    if not data.get('name'):
+        return jsonify({'success': False, 'errors': {'name': ['Name is required']}}), 400
+    
+    category.name = data.get('name')
+    category.description = data.get('description', '')
+    
+    db.session.commit()
+    
+    return jsonify({'success': True, 'category': category.to_dict()})
+
+@app.route('/api/activity-categories/<int:id>', methods=['DELETE'])
+@login_required
+def delete_activity_category(id):
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'message': 'Access denied'}), 403
+    
+    category = ActivityCategory.query.get_or_404(id)
+    
+    # Check if category has activities
+    if Activity.query.filter_by(category_id=id).first():
+        return jsonify({
+            'success': False, 
+            'message': 'Cannot delete category because it has associated activities'
+        }), 400
+    
+    db.session.delete(category)
+    db.session.commit()
+    
+    return jsonify({'success': True})
+
+# Activity Management
+@app.route('/manage/activities')
+@login_required
+def manage_activities():
+    if not current_user.is_admin:
+        flash('Access denied')
+        return redirect(url_for('dashboard'))
+    
+    activities = Activity.query.all()
+    categories = ActivityCategory.query.all()
+    return render_template('manage_activities.html', activities=activities, categories=categories)
+
+@app.route('/api/activities', methods=['GET'])
+@login_required
+def get_activities():
+    activities = Activity.query.all()
+    return jsonify({
+        'success': True, 
+        'activities': [activity.to_dict() for activity in activities]
+    })
+
+@app.route('/api/activities/by-category/<int:category_id>', methods=['GET'])
+@login_required
+def get_activities_by_category(category_id):
+    activities = Activity.query.filter_by(category_id=category_id).all()
+    return jsonify({
+        'success': True, 
+        'activities': [activity.to_dict() for activity in activities]
+    })
+
+@app.route('/api/activities', methods=['POST'])
+@login_required
+def add_activity():
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'message': 'Access denied'}), 403
+    
+    data = request.json
+    
+    if not data.get('name'):
+        return jsonify({'success': False, 'errors': {'name': ['Name is required']}}), 400
+    
+    if not data.get('category_id'):
+        return jsonify({'success': False, 'errors': {'category_id': ['Category is required']}}), 400
+    
+    # Verify category exists
+    category = ActivityCategory.query.get(data.get('category_id'))
+    if not category:
+        return jsonify({'success': False, 'errors': {'category_id': ['Invalid category']}}), 400
+    
+    activity = Activity(
+        name=data.get('name'),
+        description=data.get('description', ''),
+        category_id=data.get('category_id'),
+        created_by=current_user.id
+    )
+    
+    db.session.add(activity)
+    db.session.commit()
+    
+    return jsonify({'success': True, 'activity': activity.to_dict()})
+
+@app.route('/api/activities/<int:id>', methods=['PUT'])
+@login_required
+def update_activity(id):
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'message': 'Access denied'}), 403
+    
+    activity = Activity.query.get_or_404(id)
+    data = request.json
+    
+    if not data.get('name'):
+        return jsonify({'success': False, 'errors': {'name': ['Name is required']}}), 400
+    
+    if not data.get('category_id'):
+        return jsonify({'success': False, 'errors': {'category_id': ['Category is required']}}), 400
+    
+    # Verify category exists
+    category = ActivityCategory.query.get(data.get('category_id'))
+    if not category:
+        return jsonify({'success': False, 'errors': {'category_id': ['Invalid category']}}), 400
+    
+    activity.name = data.get('name')
+    activity.description = data.get('description', '')
+    activity.category_id = data.get('category_id')
+    
+    db.session.commit()
+    
+    return jsonify({'success': True, 'activity': activity.to_dict()})
+
+@app.route('/api/activities/<int:id>', methods=['DELETE'])
+@login_required
+def delete_activity(id):
+    if not current_user.is_admin:
+        return jsonify({'success': False, 'message': 'Access denied'}), 403
+    
+    activity = Activity.query.get_or_404(id)
+    
+    # Check if activity is used in any checklist items
+    if ChecklistItem.query.filter_by(activity_id=id).first():
+        return jsonify({
+            'success': False, 
+            'message': 'Cannot delete activity because it is used in checklist items'
+        }), 400
+    
+    db.session.delete(activity)
+    db.session.commit()
+    
+    return jsonify({'success': True})
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0') 

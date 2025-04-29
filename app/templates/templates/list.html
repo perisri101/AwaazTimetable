@@ -44,6 +44,9 @@
                                                 data-template-name="{{ template.name }}">
                                             <i class="bi bi-trash"></i> Delete
                                         </button>
+                                        <a href="{{ url_for('preview_template', id=template.id) }}" class="btn btn-sm btn-info">
+                                            <i class="bi bi-eye"></i> Preview
+                                        </a>
                                     </div>
                                     <a href="{{ url_for('new_calendar') }}?template_id={{ template.id }}" class="btn btn-sm btn-secondary">
                                         <i class="bi bi-calendar-plus"></i> Create Calendar

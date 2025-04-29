@@ -96,7 +96,22 @@ try:
             print("Table recreated successfully with rate column!")
     else:
         print("Rate column already exists.")
-        
+    
+    # Check if activity_id column exists in checklist_item table
+    cursor.execute("PRAGMA table_info(checklist_item)")
+    columns = cursor.fetchall()
+    column_names = [column[1] for column in columns]
+    
+    if 'activity_id' not in column_names:
+        print("Adding activity_id column to checklist_item table...")
+        try:
+            cursor.execute("ALTER TABLE checklist_item ADD COLUMN activity_id INTEGER")
+            conn.commit()
+            print("activity_id column added successfully!")
+        except Exception as e:
+            print(f"Error adding activity_id column: {str(e)}")
+            conn.rollback()
+    
     conn.close()
     print("Database fix completed successfully!")
 except Exception as e:

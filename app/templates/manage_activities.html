@@ -1,0 +1,425 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Activities - Awaaz Flexy Timetable{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1>Manage Activities</h1>
+        <p class="lead">Create, edit, and delete activities for checklist items</p>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{{ url_for('manage_activity_categories') }}" class="btn btn-secondary me-2">
+            <i class="bi bi-folder"></i> Manage Categories
+        </a>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addActivityModal">
+            <i class="bi bi-plus-circle"></i> New Activity
+        </button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h3 class="mb-0">Activities</h3>
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="categoryFilterBtn" data-bs-toggle="dropdown" aria-expanded="false">
+                    Filter by Category
+                </button>
+                <ul class="dropdown-menu" aria-labelledby="categoryFilterBtn">
+                    <li><a class="dropdown-item category-filter" href="#" data-category-id="all">All Categories</a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    {% for category in categories %}
+                    <li><a class="dropdown-item category-filter" href="#" data-category-id="{{ category.id }}">{{ category.name }}</a></li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Category</th>
+                        <th>Description</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="activities-table-body">
+                    {% if activities %}
+                        {% for activity in activities %}
+                        <tr data-category-id="{{ activity.category_id }}">
+                            <td>{{ activity.name }}</td>
+                            <td>{{ categories|selectattr('id', 'eq', activity.category_id)|first|attr('name') }}</td>
+                            <td>{{ activity.description }}</td>
+                            <td>
+                                <button type="button" class="btn btn-sm btn-primary edit-activity-btn" 
+                                        data-bs-toggle="modal" data-bs-target="#editActivityModal"
+                                        data-activity-id="{{ activity.id }}" 
+                                        data-activity-name="{{ activity.name }}"
+                                        data-activity-description="{{ activity.description }}"
+                                        data-category-id="{{ activity.category_id }}">
+                                    <i class="bi bi-pencil"></i> Edit
+                                </button>
+                                <button type="button" class="btn btn-sm btn-danger delete-activity-btn" 
+                                        data-bs-toggle="modal" data-bs-target="#deleteActivityModal"
+                                        data-activity-id="{{ activity.id }}" 
+                                        data-activity-name="{{ activity.name }}">
+                                    <i class="bi bi-trash"></i> Delete
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr id="no-activities-row">
+                            <td colspan="4" class="text-center">No activities found. Create your first activity to get started.</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add Activity Modal -->
+<div class="modal fade" id="addActivityModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add New Activity</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addActivityForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    
+                    <div class="mb-3">
+                        <label for="category_id" class="form-label">Category</label>
+                        <select class="form-select" id="category_id" required>
+                            <option value="">Select a category</option>
+                            {% for category in categories %}
+                            <option value="{{ category.id }}">{{ category.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="invalid-feedback" id="category-feedback"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Activity Name</label>
+                        <input type="text" class="form-control" id="name" required>
+                        <div class="invalid-feedback" id="name-feedback"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description (Optional)</label>
+                        <textarea class="form-control" id="description" rows="3"></textarea>
+                        <div class="invalid-feedback" id="description-feedback"></div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveActivityBtn">Save Activity</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Activity Modal -->
+<div class="modal fade" id="editActivityModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Activity</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editActivityForm">
+                    <input type="hidden" id="edit-activity-id">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    
+                    <div class="mb-3">
+                        <label for="edit-category-id" class="form-label">Category</label>
+                        <select class="form-select" id="edit-category-id" required>
+                            <option value="">Select a category</option>
+                            {% for category in categories %}
+                            <option value="{{ category.id }}">{{ category.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="invalid-feedback" id="edit-category-feedback"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit-name" class="form-label">Activity Name</label>
+                        <input type="text" class="form-control" id="edit-name" required>
+                        <div class="invalid-feedback" id="edit-name-feedback"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit-description" class="form-label">Description (Optional)</label>
+                        <textarea class="form-control" id="edit-description" rows="3"></textarea>
+                        <div class="invalid-feedback" id="edit-description-feedback"></div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="updateActivityBtn">Update Activity</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Activity Modal -->
+<div class="modal fade" id="deleteActivityModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the activity "<span id="activity-name-placeholder"></span>"?</p>
+                <p class="text-danger">This action cannot be undone. If this activity is used in any checklist items, you will not be able to delete it.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteActivityBtn">Delete Activity</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Setup CSRF token for all AJAX requests
+    const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+    
+    // Filter activities by category
+    document.querySelectorAll('.category-filter').forEach(item => {
+        item.addEventListener('click', function(e) {
+            e.preventDefault();
+            const categoryId = this.getAttribute('data-category-id');
+            
+            // Update dropdown button text
+            document.getElementById('categoryFilterBtn').textContent = this.textContent;
+            
+            // Filter table rows
+            const rows = document.querySelectorAll('#activities-table-body tr:not(#no-activities-row)');
+            if (categoryId === 'all') {
+                rows.forEach(row => row.style.display = '');
+            } else {
+                rows.forEach(row => {
+                    if (row.getAttribute('data-category-id') === categoryId) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+            }
+        });
+    });
+    
+    // Add new activity
+    document.getElementById('saveActivityBtn').addEventListener('click', function() {
+        const categorySelect = document.getElementById('category_id');
+        const nameInput = document.getElementById('name');
+        const descriptionInput = document.getElementById('description');
+        
+        // Reset feedback
+        document.getElementById('category-feedback').textContent = '';
+        document.getElementById('name-feedback').textContent = '';
+        categorySelect.classList.remove('is-invalid');
+        nameInput.classList.remove('is-invalid');
+        
+        // Validate
+        let isValid = true;
+        
+        if (!categorySelect.value) {
+            categorySelect.classList.add('is-invalid');
+            document.getElementById('category-feedback').textContent = 'Category is required';
+            isValid = false;
+        }
+        
+        if (!nameInput.value.trim()) {
+            nameInput.classList.add('is-invalid');
+            document.getElementById('name-feedback').textContent = 'Name is required';
+            isValid = false;
+        }
+        
+        if (!isValid) return;
+        
+        // Prepare data
+        const data = {
+            category_id: categorySelect.value,
+            name: nameInput.value.trim(),
+            description: descriptionInput.value.trim()
+        };
+        
+        // Send request
+        fetch('/api/activities', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Close modal and reload page
+                document.getElementById('addActivityModal').querySelector('.btn-close').click();
+                window.location.reload();
+            } else {
+                // Show errors
+                if (data.errors) {
+                    if (data.errors.category_id) {
+                        categorySelect.classList.add('is-invalid');
+                        document.getElementById('category-feedback').textContent = data.errors.category_id[0];
+                    }
+                    if (data.errors.name) {
+                        nameInput.classList.add('is-invalid');
+                        document.getElementById('name-feedback').textContent = data.errors.name[0];
+                    }
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error adding activity:', error);
+            alert('An error occurred while adding the activity');
+        });
+    });
+    
+    // Edit activity modal setup
+    document.querySelectorAll('.edit-activity-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const activityId = this.getAttribute('data-activity-id');
+            const activityName = this.getAttribute('data-activity-name');
+            const activityDescription = this.getAttribute('data-activity-description');
+            const categoryId = this.getAttribute('data-category-id');
+            
+            document.getElementById('edit-activity-id').value = activityId;
+            document.getElementById('edit-name').value = activityName;
+            document.getElementById('edit-description').value = activityDescription;
+            document.getElementById('edit-category-id').value = categoryId;
+        });
+    });
+    
+    // Update activity
+    document.getElementById('updateActivityBtn').addEventListener('click', function() {
+        const activityId = document.getElementById('edit-activity-id').value;
+        const categorySelect = document.getElementById('edit-category-id');
+        const nameInput = document.getElementById('edit-name');
+        const descriptionInput = document.getElementById('edit-description');
+        
+        // Reset feedback
+        document.getElementById('edit-category-feedback').textContent = '';
+        document.getElementById('edit-name-feedback').textContent = '';
+        categorySelect.classList.remove('is-invalid');
+        nameInput.classList.remove('is-invalid');
+        
+        // Validate
+        let isValid = true;
+        
+        if (!categorySelect.value) {
+            categorySelect.classList.add('is-invalid');
+            document.getElementById('edit-category-feedback').textContent = 'Category is required';
+            isValid = false;
+        }
+        
+        if (!nameInput.value.trim()) {
+            nameInput.classList.add('is-invalid');
+            document.getElementById('edit-name-feedback').textContent = 'Name is required';
+            isValid = false;
+        }
+        
+        if (!isValid) return;
+        
+        // Prepare data
+        const data = {
+            category_id: categorySelect.value,
+            name: nameInput.value.trim(),
+            description: descriptionInput.value.trim()
+        };
+        
+        // Send request
+        fetch(`/api/activities/${activityId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Close modal and reload page
+                document.getElementById('editActivityModal').querySelector('.btn-close').click();
+                window.location.reload();
+            } else {
+                // Show errors
+                if (data.errors) {
+                    if (data.errors.category_id) {
+                        categorySelect.classList.add('is-invalid');
+                        document.getElementById('edit-category-feedback').textContent = data.errors.category_id[0];
+                    }
+                    if (data.errors.name) {
+                        nameInput.classList.add('is-invalid');
+                        document.getElementById('edit-name-feedback').textContent = data.errors.name[0];
+                    }
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error updating activity:', error);
+            alert('An error occurred while updating the activity');
+        });
+    });
+    
+    // Delete activity modal setup
+    document.querySelectorAll('.delete-activity-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            const activityId = this.getAttribute('data-activity-id');
+            const activityName = this.getAttribute('data-activity-name');
+            
+            document.getElementById('activity-name-placeholder').textContent = activityName;
+            document.getElementById('confirmDeleteActivityBtn').setAttribute('data-activity-id', activityId);
+        });
+    });
+    
+    // Delete activity
+    document.getElementById('confirmDeleteActivityBtn').addEventListener('click', function() {
+        const activityId = this.getAttribute('data-activity-id');
+        
+        // Send request
+        fetch(`/api/activities/${activityId}`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRFToken': csrfToken
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Close modal and reload page
+                document.getElementById('deleteActivityModal').querySelector('.btn-close').click();
+                window.location.reload();
+            } else {
+                // Show error message
+                alert(data.message || 'Could not delete activity');
+            }
+        })
+        .catch(error => {
+            console.error('Error deleting activity:', error);
+            alert('An error occurred while deleting the activity');
+        });
+    });
+});
+</script>
+{% endblock %} 

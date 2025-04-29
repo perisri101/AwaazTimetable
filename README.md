@@ -1,17 +1,90 @@
 # Awaaz Flexy Timetable
 
-A flexible 24/7 scheduling system for caregivers built with Python, Flask, and Docker.
+A flexible scheduling system for caregivers, allowing for 24/7 schedule templates, checklists, and calendar management.
 
 ## Features
 
-- Create weekly schedule templates with 2-hour time blocks
+- Create weekly schedule templates with 2-hour blocks
 - Assign multiple caregivers to each time slot
-- Configure checklist items for each time slot
-- Generate calendars from templates
-- View schedules by caregiver or in hourly view
-- Track caregiver hours with limits (40 hrs/week, 8 hrs/day, 5 days/week)
-- Generate reports and analytics
-- Multi-user system with admin capabilities
+- Configure checklists for each time slot with tasks
+- Create calendars from templates for specific time periods
+- View schedules by caregiver, hourly view, or summary
+- Track caregiver hours with max 40 hrs/week, 8 hrs/day, 5 days/week limits
+- Overtime calculation at 1.5x rate for hours above 40 per week
+- Mobile-responsive design for access on any device
+- Customizable shift durations
+- Predefined activities/tasks for checklist creation
+- Category-based organization of activity checklists
+
+## Local Development
+
+### Prerequisites
+- Python 3.9+
+- pip
+
+### Setup
+1. Clone the repository
+2. Create a virtual environment:
+   ```
+   python -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+3. Install dependencies:
+   ```
+   pip install -r requirements.txt
+   ```
+4. Run the application:
+   ```
+   python app.py
+   ```
+5. Access the application at http://localhost:5000
+
+## Deployment
+
+The application is ready for deployment to cloud platforms like Render, Heroku, or PythonAnywhere.
+
+### Deploying to Render
+
+1. Create a new Web Service in your Render dashboard
+2. Connect your GitHub repository
+3. Use the following settings:
+   - **Environment**: Python 3.9
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `gunicorn 'app:create_app()'`
+4. Add the following environment variables:
+   - `SECRET_KEY`: A secure random string
+   - `DATABASE_URL`: (Optional) PostgreSQL connection string if using a database service
+
+### Deploying to Heroku
+
+1. Install the Heroku CLI
+2. Login to Heroku:
+   ```
+   heroku login
+   ```
+3. Create a new Heroku app:
+   ```
+   heroku create awaaz-timetable
+   ```
+4. Add a PostgreSQL database:
+   ```
+   heroku addons:create heroku-postgresql:hobby-dev
+   ```
+5. Deploy the application:
+   ```
+   git push heroku main
+   ```
+6. Open the application:
+   ```
+   heroku open
+   ```
+
+## Default Login
+
+- Username: admin
+- Password: admin
+
+*Note: Change the default login credentials immediately after first login for security reasons.*
 
 ## Tech Stack
 
@@ -19,35 +92,6 @@ A flexible 24/7 scheduling system for caregivers built with Python, Flask, and D
 - **Database**: SQLAlchemy with SQLite
 - **Frontend**: HTML, CSS, JavaScript, Bootstrap 5
 - **Containerization**: Docker
-
-## Getting Started
-
-### Prerequisites
-
-- Docker and Docker Compose
-
-### Setup and Installation
-
-1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/AwaazFlexyTimetable.git
-cd AwaazFlexyTimetable
-```
-
-2. Build and start the application using Docker Compose:
-```bash
-docker-compose up -d --build
-```
-
-3. Access the application at [http://localhost:5000](http://localhost:5000)
-
-### Default Credentials
-
-The application comes with a default admin account:
-- Username: admin
-- Password: admin
-
-*Please change these credentials in a production environment.*
 
 ## Project Structure
 

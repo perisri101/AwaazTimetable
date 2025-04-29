@@ -1,0 +1,689 @@
+{% extends "base.html" %}
+
+{% block title %}Preview Template - {{ template.name }} - Awaaz Flexy Timetable{% endblock %}
+
+{% block head %}
+<style>
+    .time-slot {
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 10px;
+        margin-bottom: 10px;
+        background-color: #f8f9fa;
+    }
+    
+    .day-column {
+        padding: 10px;
+        min-height: 150px;
+    }
+    
+    .caregiver-list {
+        margin-top: 10px;
+    }
+    
+    .caregiver-item {
+        display: inline-block;
+        margin: 2px;
+        padding: 2px 8px;
+        background-color: #2196f3;
+        color: white;
+        border-radius: 16px;
+        font-size: 0.85rem;
+    }
+    
+    .checklist-item {
+        margin: 5px 0;
+        padding: 5px;
+        border-left: 3px solid #28a745;
+        background-color: #f0f0f0;
+        font-size: 0.9rem;
+    }
+    
+    .slot-container {
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        overflow: hidden;
+        margin-bottom: 15px;
+    }
+    
+    .slot-header {
+        background-color: #f0f0f0;
+        padding: 8px 15px;
+        border-bottom: 1px solid #ddd;
+        font-weight: bold;
+    }
+    
+    .slot-body {
+        padding: 15px;
+    }
+    
+    .preview-section {
+        margin-top: 20px;
+    }
+    
+    .caregiver-schedule {
+        margin-bottom: 20px;
+    }
+    
+    .daily-schedule {
+        margin-bottom: 20px;
+    }
+    
+    .hourly-schedule {
+        margin-bottom: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1>{{ template.name }}</h1>
+        <p class="lead">{{ template.description }}</p>
+    </div>
+    <div class="col-md-4 text-end">
+        <a href="{{ url_for('edit_template', id=template.id) }}" class="btn btn-primary">
+            <i class="bi bi-pencil"></i> Edit Template
+        </a>
+        <a href="{{ url_for('list_templates') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back to Templates
+        </a>
+    </div>
+</div>
+
+<ul class="nav nav-tabs mb-4" id="previewTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview-tab-pane" type="button" role="tab">
+            <i class="bi bi-grid-3x3"></i> Overview
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="caregiver-tab" data-bs-toggle="tab" data-bs-target="#caregiver-tab-pane" type="button" role="tab">
+            <i class="bi bi-person"></i> By Caregiver
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="day-tab" data-bs-toggle="tab" data-bs-target="#day-tab-pane" type="button" role="tab">
+            <i class="bi bi-calendar-day"></i> By Day
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="hour-tab" data-bs-toggle="tab" data-bs-target="#hour-tab-pane" type="button" role="tab">
+            <i class="bi bi-clock"></i> By Hour
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="previewTabContent">
+    <!-- Overview Tab -->
+    <div class="tab-pane fade show active" id="overview-tab-pane" role="tabpanel" aria-labelledby="overview-tab" tabindex="0">
+        <div class="row">
+            <div class="col-md-12 mb-3">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle-fill me-2"></i>
+                    This is an overview of the complete weekly schedule. Select a specific tab to see more detailed views.
+                </div>
+            </div>
+            
+            <!-- Days of week headers -->
+            <div class="col-md-12 mb-3">
+                <div class="row">
+                    <div class="col-md text-center"><strong>Monday</strong></div>
+                    <div class="col-md text-center"><strong>Tuesday</strong></div>
+                    <div class="col-md text-center"><strong>Wednesday</strong></div>
+                    <div class="col-md text-center"><strong>Thursday</strong></div>
+                    <div class="col-md text-center"><strong>Friday</strong></div>
+                    <div class="col-md text-center"><strong>Saturday</strong></div>
+                    <div class="col-md text-center"><strong>Sunday</strong></div>
+                </div>
+            </div>
+            
+            <!-- Time slots -->
+            {% for hour in range(0, 24, 2) %}
+            <div class="col-md-12 mb-4">
+                <div class="slot-container">
+                    <div class="slot-header">
+                        {{ "%02d:00"|format(hour) }} - {{ "%02d:00"|format(hour+2) }}
+                    </div>
+                    <div class="slot-body">
+                        <div class="row">
+                            {% for day in range(7) %}
+                            <div class="col-md day-column" id="overview-day-{{ day }}-hour-{{ hour }}">
+                                <div class="caregivers-container" id="overview-caregivers-{{ day }}-{{ hour }}"></div>
+                                <div class="checklists-container mt-2" id="overview-checklists-{{ day }}-{{ hour }}"></div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    
+    <!-- By Caregiver Tab -->
+    <div class="tab-pane fade" id="caregiver-tab-pane" role="tabpanel" aria-labelledby="caregiver-tab" tabindex="0">
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="form-group">
+                    <label for="caregiver-select" class="form-label">Select Caregiver</label>
+                    <select class="form-select" id="caregiver-select">
+                        <option value="">Choose a caregiver...</option>
+                        {% for caregiver in caregivers %}
+                        <option value="{{ caregiver.id }}">{{ caregiver.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <div id="caregiver-schedule-container" class="preview-section">
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle-fill me-2"></i>
+                Select a caregiver to view their schedule for this template.
+            </div>
+        </div>
+    </div>
+    
+    <!-- By Day Tab -->
+    <div class="tab-pane fade" id="day-tab-pane" role="tabpanel" aria-labelledby="day-tab" tabindex="0">
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="form-group">
+                    <label for="day-select" class="form-label">Select Day</label>
+                    <select class="form-select" id="day-select">
+                        <option value="">Choose a day...</option>
+                        <option value="0">Monday</option>
+                        <option value="1">Tuesday</option>
+                        <option value="2">Wednesday</option>
+                        <option value="3">Thursday</option>
+                        <option value="4">Friday</option>
+                        <option value="5">Saturday</option>
+                        <option value="6">Sunday</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <div id="day-schedule-container" class="preview-section">
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle-fill me-2"></i>
+                Select a day to view the complete schedule for that day.
+            </div>
+        </div>
+    </div>
+    
+    <!-- By Hour Tab -->
+    <div class="tab-pane fade" id="hour-tab-pane" role="tabpanel" aria-labelledby="hour-tab" tabindex="0">
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="form-group">
+                    <label for="hour-select" class="form-label">Select Hour</label>
+                    <select class="form-select" id="hour-select">
+                        <option value="">Choose an hour...</option>
+                        {% for hour in range(0, 24) %}
+                        <option value="{{ hour }}">{{ "%02d:00"|format(hour) }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <div id="hour-schedule-container" class="preview-section">
+            <div class="alert alert-info">
+                <i class="bi bi-info-circle-fill me-2"></i>
+                Select an hour to view who is scheduled and what activities are planned during that time across all days.
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Load overview data
+    loadOverviewData();
+    
+    // Set up event listeners for the different views
+    document.getElementById('caregiver-select').addEventListener('change', function() {
+        const caregiverId = this.value;
+        if (caregiverId) {
+            loadCaregiverSchedule(caregiverId);
+        } else {
+            document.getElementById('caregiver-schedule-container').innerHTML = `
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle-fill me-2"></i>
+                    Select a caregiver to view their schedule for this template.
+                </div>
+            `;
+        }
+    });
+    
+    document.getElementById('day-select').addEventListener('change', function() {
+        const day = this.value;
+        if (day) {
+            loadDaySchedule(day);
+        } else {
+            document.getElementById('day-schedule-container').innerHTML = `
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle-fill me-2"></i>
+                    Select a day to view the complete schedule for that day.
+                </div>
+            `;
+        }
+    });
+    
+    document.getElementById('hour-select').addEventListener('change', function() {
+        const hour = this.value;
+        if (hour) {
+            loadHourSchedule(hour);
+        } else {
+            document.getElementById('hour-schedule-container').innerHTML = `
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle-fill me-2"></i>
+                    Select an hour to view who is scheduled and what activities are planned during that time across all days.
+                </div>
+            `;
+        }
+    });
+    
+    // Functions to load data for different views
+    function loadOverviewData() {
+        fetch('{{ url_for("get_template_shifts", id=template.id) }}')
+            .then(response => response.json())
+            .then(data => {
+                renderOverview(data);
+            })
+            .catch(error => {
+                console.error('Error loading template data:', error);
+                alert('An error occurred while loading template data.');
+            });
+    }
+    
+    function loadCaregiverSchedule(caregiverId) {
+        fetch(`{{ url_for("preview_template_by_caregiver", id=template.id, caregiver_id=0) }}`.replace('0', caregiverId))
+            .then(response => response.json())
+            .then(data => {
+                renderCaregiverSchedule(data);
+            })
+            .catch(error => {
+                console.error('Error loading caregiver schedule:', error);
+                alert('An error occurred while loading caregiver schedule.');
+            });
+    }
+    
+    function loadDaySchedule(day) {
+        fetch(`{{ url_for("preview_template_by_day", id=template.id, day=0) }}`.replace('0', day))
+            .then(response => response.json())
+            .then(data => {
+                renderDaySchedule(data);
+            })
+            .catch(error => {
+                console.error('Error loading day schedule:', error);
+                alert('An error occurred while loading day schedule.');
+            });
+    }
+    
+    function loadHourSchedule(hour) {
+        fetch(`{{ url_for("preview_template_by_hour", id=template.id, hour=0) }}`.replace('0', hour))
+            .then(response => response.json())
+            .then(data => {
+                renderHourSchedule(data);
+            })
+            .catch(error => {
+                console.error('Error loading hour schedule:', error);
+                alert('An error occurred while loading hour schedule.');
+            });
+    }
+    
+    // Render functions for different views
+    function renderOverview(data) {
+        // Process shifts
+        data.shifts.forEach(shift => {
+            const container = document.getElementById(`overview-caregivers-${shift.day_of_week}-${shift.start_hour}`);
+            const caregivers = container.querySelectorAll(`.caregiver-item[data-caregiver-id="${shift.caregiver_id}"]`);
+            
+            // Only add if not already present (avoid duplicates)
+            if (caregivers.length === 0) {
+                // Find caregiver name
+                const caregiverSelect = document.getElementById('caregiver-select');
+                const caregiverOption = caregiverSelect.querySelector(`option[value="${shift.caregiver_id}"]`);
+                const caregiverName = caregiverOption ? caregiverOption.textContent : 'Unknown';
+                
+                const caregiverElement = document.createElement('div');
+                caregiverElement.className = 'caregiver-item';
+                caregiverElement.dataset.caregiverId = shift.caregiver_id;
+                caregiverElement.textContent = caregiverName;
+                container.appendChild(caregiverElement);
+            }
+        });
+        
+        // Process checklist items
+        data.checklists.forEach(item => {
+            const container = document.getElementById(`overview-checklists-${item.day_of_week}-${item.start_hour}`);
+            
+            const itemElement = document.createElement('div');
+            itemElement.className = 'checklist-item';
+            itemElement.textContent = item.description;
+            container.appendChild(itemElement);
+        });
+    }
+    
+    function renderCaregiverSchedule(data) {
+        const container = document.getElementById('caregiver-schedule-container');
+        
+        if (data.shifts.length === 0) {
+            container.innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    This caregiver has no shifts assigned in this template.
+                </div>
+            `;
+            return;
+        }
+        
+        let html = `
+            <h3>Schedule for ${data.caregiver.name}</h3>
+            <p>This caregiver is scheduled for the following time slots:</p>
+        `;
+        
+        // Group shifts by day
+        const dayMap = {
+            0: 'Monday',
+            1: 'Tuesday',
+            2: 'Wednesday',
+            3: 'Thursday',
+            4: 'Friday',
+            5: 'Saturday',
+            6: 'Sunday'
+        };
+        
+        const shiftsByDay = {};
+        data.shifts.forEach(shift => {
+            if (!shiftsByDay[shift.day_of_week]) {
+                shiftsByDay[shift.day_of_week] = [];
+            }
+            shiftsByDay[shift.day_of_week].push(shift);
+        });
+        
+        // Sort shifts by start hour
+        for (const day in shiftsByDay) {
+            shiftsByDay[day].sort((a, b) => a.start_hour - b.start_hour);
+        }
+        
+        // Render shifts by day
+        for (let day = 0; day < 7; day++) {
+            if (shiftsByDay[day] && shiftsByDay[day].length > 0) {
+                html += `
+                    <div class="card mb-3">
+                        <div class="card-header">
+                            <h5 class="mb-0">${dayMap[day]}</h5>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-group">
+                `;
+                
+                shiftsByDay[day].forEach(shift => {
+                    html += `
+                        <li class="list-group-item">
+                            ${shift.start_hour}:00 - ${shift.end_hour}:00
+                        </li>
+                    `;
+                });
+                
+                html += `
+                            </ul>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        // Calculate total hours
+        const totalHours = data.shifts.reduce((total, shift) => total + (shift.end_hour - shift.start_hour), 0);
+        
+        html += `
+            <div class="alert alert-info">
+                <strong>Total Hours:</strong> ${totalHours} hours per week
+            </div>
+        `;
+        
+        container.innerHTML = html;
+    }
+    
+    function renderDaySchedule(data) {
+        const container = document.getElementById('day-schedule-container');
+        const dayMap = {
+            0: 'Monday',
+            1: 'Tuesday',
+            2: 'Wednesday',
+            3: 'Thursday',
+            4: 'Friday',
+            5: 'Saturday',
+            6: 'Sunday'
+        };
+        
+        let html = `
+            <h3>Schedule for ${dayMap[data.day]}</h3>
+        `;
+        
+        // Group shifts by hour
+        const shiftsByHour = {};
+        data.shifts.forEach(shift => {
+            for (let hour = shift.start_hour; hour < shift.end_hour; hour++) {
+                if (!shiftsByHour[hour]) {
+                    shiftsByHour[hour] = [];
+                }
+                
+                // Find caregiver
+                const caregiver = data.caregivers.find(c => c.id === shift.caregiver_id);
+                
+                if (caregiver && !shiftsByHour[hour].some(s => s.id === caregiver.id)) {
+                    shiftsByHour[hour].push(caregiver);
+                }
+            }
+        });
+        
+        // Group checklist items by hour
+        const checklistsByHour = {};
+        data.checklist_items.forEach(item => {
+            for (let hour = item.start_hour; hour < item.end_hour; hour++) {
+                if (!checklistsByHour[hour]) {
+                    checklistsByHour[hour] = [];
+                }
+                checklistsByHour[hour].push(item);
+            }
+        });
+        
+        // Render schedule by hour
+        for (let hour = 0; hour < 24; hour += 2) {
+            const caregivers = shiftsByHour[hour] || [];
+            const checklists = checklistsByHour[hour] || [];
+            
+            if (caregivers.length === 0 && checklists.length === 0) {
+                continue; // Skip empty slots
+            }
+            
+            html += `
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h5 class="mb-0">${hour}:00 - ${hour + 2}:00</h5>
+                    </div>
+                    <div class="card-body">
+            `;
+            
+            // Render caregivers
+            if (caregivers.length > 0) {
+                html += `
+                    <h6>Caregivers:</h6>
+                    <div class="mb-3">
+                `;
+                
+                caregivers.forEach(caregiver => {
+                    html += `<span class="caregiver-item">${caregiver.name}</span> `;
+                });
+                
+                html += `
+                    </div>
+                `;
+            }
+            
+            // Render checklist items
+            if (checklists.length > 0) {
+                html += `
+                    <h6>Tasks:</h6>
+                    <ul class="list-group">
+                `;
+                
+                checklists.forEach(item => {
+                    html += `
+                        <li class="list-group-item">
+                            ${item.description}
+                        </li>
+                    `;
+                });
+                
+                html += `
+                    </ul>
+                `;
+            }
+            
+            html += `
+                    </div>
+                </div>
+            `;
+        }
+        
+        if (html === `<h3>Schedule for ${dayMap[data.day]}</h3>`) {
+            html += `
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    No shifts or tasks scheduled for this day.
+                </div>
+            `;
+        }
+        
+        container.innerHTML = html;
+    }
+    
+    function renderHourSchedule(data) {
+        const container = document.getElementById('hour-schedule-container');
+        const dayMap = {
+            0: 'Monday',
+            1: 'Tuesday',
+            2: 'Wednesday',
+            3: 'Thursday',
+            4: 'Friday',
+            5: 'Saturday',
+            6: 'Sunday'
+        };
+        
+        let html = `
+            <h3>Schedule for ${data.hour}:00</h3>
+        `;
+        
+        // Group by day
+        const scheduleByDay = {};
+        
+        // Process shifts
+        data.shifts.forEach(shift => {
+            if (!scheduleByDay[shift.day_of_week]) {
+                scheduleByDay[shift.day_of_week] = {
+                    caregivers: [],
+                    checklists: []
+                };
+            }
+            
+            // Find caregiver
+            const caregiver = data.caregivers.find(c => c.id === shift.caregiver_id);
+            
+            if (caregiver && !scheduleByDay[shift.day_of_week].caregivers.some(c => c.id === caregiver.id)) {
+                scheduleByDay[shift.day_of_week].caregivers.push(caregiver);
+            }
+        });
+        
+        // Process checklist items
+        data.checklist_items.forEach(item => {
+            if (!scheduleByDay[item.day_of_week]) {
+                scheduleByDay[item.day_of_week] = {
+                    caregivers: [],
+                    checklists: []
+                };
+            }
+            
+            scheduleByDay[item.day_of_week].checklists.push(item);
+        });
+        
+        // Render by day
+        for (let day = 0; day < 7; day++) {
+            const schedule = scheduleByDay[day];
+            
+            if (!schedule || (schedule.caregivers.length === 0 && schedule.checklists.length === 0)) {
+                continue; // Skip empty days
+            }
+            
+            html += `
+                <div class="card mb-3">
+                    <div class="card-header">
+                        <h5 class="mb-0">${dayMap[day]}</h5>
+                    </div>
+                    <div class="card-body">
+            `;
+            
+            // Render caregivers
+            if (schedule.caregivers.length > 0) {
+                html += `
+                    <h6>Caregivers:</h6>
+                    <div class="mb-3">
+                `;
+                
+                schedule.caregivers.forEach(caregiver => {
+                    html += `<span class="caregiver-item">${caregiver.name}</span> `;
+                });
+                
+                html += `
+                    </div>
+                `;
+            }
+            
+            // Render checklist items
+            if (schedule.checklists.length > 0) {
+                html += `
+                    <h6>Tasks:</h6>
+                    <ul class="list-group">
+                `;
+                
+                schedule.checklists.forEach(item => {
+                    html += `
+                        <li class="list-group-item">
+                            ${item.description}
+                        </li>
+                    `;
+                });
+                
+                html += `
+                    </ul>
+                `;
+            }
+            
+            html += `
+                    </div>
+                </div>
+            `;
+        }
+        
+        if (html === `<h3>Schedule for ${data.hour}:00</h3>`) {
+            html += `
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    No shifts or tasks scheduled for this hour on any day.
+                </div>
+            `;
+        }
+        
+        container.innerHTML = html;
+    }
+});
+</script>
+{% endblock %} 
