@@ -137,6 +137,18 @@ def index():
 def dashboard():
     templates = gitdb.get_all_templates()
     calendars = gitdb.get_all_calendars()
+    
+    # Create a dictionary of templates for easy lookup
+    templates_dict = {template['id']: template for template in templates}
+    
+    # Enrich calendars with template names
+    for calendar in calendars:
+        template_id = calendar.get('template_id')
+        if template_id and template_id in templates_dict:
+            calendar['template_name'] = templates_dict[template_id]['name']
+        else:
+            calendar['template_name'] = f"Unknown (ID: {template_id})"
+    
     return render_template('dashboard.html', templates=templates, calendars=calendars)
 
 # Management routes for admins
@@ -481,6 +493,19 @@ def preview_template_by_hour(id, hour):
 @app.route('/calendars')
 def list_calendars():
     calendars = gitdb.get_all_calendars()
+    templates = gitdb.get_all_templates()
+    
+    # Create a dictionary of templates for easy lookup
+    templates_dict = {template['id']: template for template in templates}
+    
+    # Enrich calendars with template names
+    for calendar in calendars:
+        template_id = calendar.get('template_id')
+        if template_id and template_id in templates_dict:
+            calendar['template_name'] = templates_dict[template_id]['name']
+        else:
+            calendar['template_name'] = f"Unknown (ID: {template_id})"
+            
     return render_template('calendars/list.html', calendars=calendars)
 
 @app.route('/calendars/new')
@@ -492,28 +517,41 @@ def new_calendar():
 def create_calendar():
     data = request.json
     
+    # Log received data for debugging
+    app.logger.debug(f"Creating calendar with data: {data}")
+    
     if not data.get('name'):
+        app.logger.warning("Calendar creation failed: Name is required")
         return jsonify({'success': False, 'errors': {'name': ['Name is required']}}), 400
     
     if not data.get('template_id'):
+        app.logger.warning("Calendar creation failed: Template is required")
         return jsonify({'success': False, 'errors': {'template_id': ['Template is required']}}), 400
     
     if not data.get('start_date'):
+        app.logger.warning("Calendar creation failed: Start date is required")
         return jsonify({'success': False, 'errors': {'start_date': ['Start date is required']}}), 400
     
     # Check if template exists
     template = gitdb.get_template(data.get('template_id'))
     if not template:
+        app.logger.warning(f"Calendar creation failed: Template {data.get('template_id')} not found")
         return jsonify({'success': False, 'errors': {'template_id': ['Template not found']}}), 400
     
-    # Create calendar
-    calendar = gitdb.create_calendar(data)
-    
-    return jsonify({
-        'success': True, 
-        'calendar': calendar,
-        'redirect': url_for('view_calendar', id=calendar['id'])
-    })
+    try:
+        # Create calendar
+        calendar = gitdb.create_calendar(data)
+        
+        app.logger.info(f"Calendar created successfully with ID {calendar['id']}")
+        
+        return jsonify({
+            'success': True, 
+            'calendar': calendar,
+            'redirect': url_for('view_calendar', id=calendar['id'])
+        })
+    except Exception as e:
+        app.logger.error(f"Error creating calendar: {str(e)}")
+        return jsonify({'success': False, 'message': f"An error occurred: {str(e)}"}), 500
 
 @app.route('/calendars/view/<int:id>')
 def view_calendar(id):
@@ -522,7 +560,17 @@ def view_calendar(id):
         flash('Calendar not found', 'danger')
         return redirect(url_for('list_calendars'))
     
-    template = gitdb.get_template(calendar['template_id'])
+    template_id = calendar.get('template_id')
+    template = gitdb.get_template(template_id)
+    
+    # If template doesn't exist, create a placeholder
+    if not template:
+        template = {
+            'id': template_id,
+            'name': f"Unknown Template (ID: {template_id})",
+            'description': "This template no longer exists."
+        }
+    
     caregivers = gitdb.get_all_caregivers()
     return render_template('calendars/view.html', calendar=calendar, template=template, caregivers=caregivers)
 
@@ -557,6 +605,15 @@ def calendar_reports(id):
     if not calendar:
         flash('Calendar not found', 'danger')
         return redirect(url_for('list_calendars'))
+    
+    # Get template information
+    template_id = calendar.get('template_id')
+    template = gitdb.get_template(template_id)
+    
+    if template:
+        calendar['template_name'] = template['name']
+    else:
+        calendar['template_name'] = f"Unknown Template (ID: {template_id})"
         
     return render_template('calendars/reports.html', calendar=calendar)
 

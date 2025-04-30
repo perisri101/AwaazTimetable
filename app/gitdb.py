@@ -21,37 +21,45 @@ for dir_name in ['caregivers', 'templates', 'calendars', 'shifts', 'checklists',
     os.makedirs(os.path.join(DATA_DIR, dir_name), exist_ok=True)
 
 def _get_meta():
-    """Get or create metadata file with ID counters"""
+    """Get next ID from meta.json"""
+    # Ensure DATA_DIR exists
+    if not os.path.exists(DATA_DIR):
+        logger.info(f"Creating data directory: {DATA_DIR}")
+        os.makedirs(DATA_DIR)
+    
     meta_path = os.path.join(DATA_DIR, 'meta.json')
     
-    if os.path.exists(meta_path):
-        with open(meta_path, 'r') as f:
-            return json.load(f)
-    
-    # Default metadata
-    meta = {
-        'next_ids': {
-            'caregiver': 1,
-            'template': 1,
-            'calendar': 1,
-            'shift': 1,
-            'checklist_item': 1,
-            'activity': 1,
-            'activity_category': 1
+    if not os.path.exists(meta_path):
+        meta = {
+            'next_ids': {
+                'caregiver': 1,
+                'template': 1,
+                'calendar': 1,
+                'shift': 1,
+                'checklist_item': 1,
+                'activity': 1,
+                'activity_category': 1
+            }
         }
-    }
+        _save_meta(meta)
+        return meta
     
-    with open(meta_path, 'w') as f:
-        json.dump(meta, f, indent=2)
-    
-    return meta
+    with open(meta_path, 'r') as f:
+        return json.load(f)
 
 def _save_meta(meta):
-    """Save metadata file"""
+    """Save meta.json file"""
+    # Ensure DATA_DIR exists
+    if not os.path.exists(DATA_DIR):
+        logger.info(f"Creating data directory: {DATA_DIR}")
+        os.makedirs(DATA_DIR)
+        
     meta_path = os.path.join(DATA_DIR, 'meta.json')
     
     with open(meta_path, 'w') as f:
         json.dump(meta, f, indent=2)
+    
+    _safe_commit("Updated meta.json with new ID counters")
 
 def _get_next_id(entity_type):
     """Get next ID for an entity type and increment the counter"""
@@ -62,36 +70,49 @@ def _get_next_id(entity_type):
     return next_id
 
 def _save_entity(entity_type, entity_data):
-    """Save an entity to its JSON file"""
-    entity_dir = os.path.join(DATA_DIR, f"{entity_type}s")
-    file_path = os.path.join(entity_dir, f"{entity_data['id']}.json")
-    
-    logger.info(f"Saving {entity_type} with ID {entity_data['id']} to {file_path}")
-    with open(file_path, 'w') as f:
-        json.dump(entity_data, f, indent=2)
-    
-    # Commit changes if not in bulk operation
-    if not os.environ.get('GITDB_BULK_OPERATION'):
-        logger.info(f"Triggering Git commit for {entity_type} ID: {entity_data['id']}")
-        try:
-            # Check if current app has Git persistence enabled
-            from flask import current_app
-            git_enabled = current_app.config.get('GIT_PERSISTENCE_ENABLED', False)
-            
-            if git_enabled:
-                logger.info(f"Git persistence is enabled, committing changes")
-                from .git_utils import commit_and_push
-                commit_result = commit_and_push(f"Updated {entity_type} {entity_data['id']}")
-                logger.info(f"Git commit result: {'Success' if commit_result else 'Failed'}")
-            else:
-                logger.warning("Git persistence is disabled, changes saved locally only")
-            # If git is not enabled, we just saved the file locally which is fine
-        except Exception as e:
-            # If there's any error accessing the app context, just proceed silently
-            # The file is already saved locally at this point
-            logger.error(f"Error during Git commit: {str(e)}")
-            print(f"Note: Git persistence skipped: {str(e)}")
-            pass
+    """Save an entity to a JSON file"""
+    try:
+        id = entity_data['id']
+        
+        # Ensure the directory exists
+        entity_dir = os.path.join(DATA_DIR, f"{entity_type}s")
+        if not os.path.exists(entity_dir):
+            logging.info(f"Creating directory for {entity_type}s: {entity_dir}")
+            os.makedirs(entity_dir)
+        
+        file_path = os.path.join(entity_dir, f"{id}.json")
+        
+        logger.info(f"Saving {entity_type} with ID {id} to {file_path}")
+        with open(file_path, 'w') as f:
+            json.dump(entity_data, f, indent=2)
+        
+        # Commit changes if not in bulk operation
+        if not os.environ.get('GITDB_BULK_OPERATION'):
+            logger.info(f"Triggering Git commit for {entity_type} ID: {id}")
+            try:
+                # Check if current app has Git persistence enabled
+                from flask import current_app
+                git_enabled = current_app.config.get('GIT_PERSISTENCE_ENABLED', False)
+                
+                if git_enabled:
+                    logger.info(f"Git persistence is enabled, committing changes")
+                    from .git_utils import commit_and_push
+                    commit_result = commit_and_push(f"Updated {entity_type} {id}")
+                    logger.info(f"Git commit result: {'Success' if commit_result else 'Failed'}")
+                else:
+                    logger.warning("Git persistence is disabled, changes saved locally only")
+                # If git is not enabled, we just saved the file locally which is fine
+            except Exception as e:
+                # If there's any error accessing the app context, just proceed silently
+                # The file is already saved locally at this point
+                logger.error(f"Error during Git commit: {str(e)}")
+                print(f"Note: Git persistence skipped: {str(e)}")
+                pass
+        
+        return True
+    except Exception as e:
+        logging.error(f"Error saving {entity_type} {id}: {str(e)}")
+        raise
 
 # --- Caregiver functions ---
 
@@ -262,14 +283,17 @@ def get_template_shifts(template_id):
         return json.load(f)
 
 def save_template_shifts(template_id, shifts):
-    """Save all shifts for a template"""
-    file_path = os.path.join(DATA_DIR, 'shifts', f"template-{template_id}-shifts.json")
-    
+    """Save shifts for a template"""
+    # Ensure the shifts directory exists
+    shifts_dir = os.path.join(DATA_DIR, 'shifts')
+    if not os.path.exists(shifts_dir):
+        os.makedirs(shifts_dir)
+        
+    file_path = os.path.join(shifts_dir, f"template-{template_id}-shifts.json")
     with open(file_path, 'w') as f:
         json.dump(shifts, f, indent=2)
     
     _safe_commit(f"Updated shifts for template {template_id}")
-    return True
 
 def get_calendar_shifts(calendar_id):
     """Get all shifts for a calendar"""
@@ -282,14 +306,17 @@ def get_calendar_shifts(calendar_id):
         return json.load(f)
 
 def save_calendar_shifts(calendar_id, shifts):
-    """Save all shifts for a calendar"""
-    file_path = os.path.join(DATA_DIR, 'shifts', f"calendar-{calendar_id}-shifts.json")
-    
+    """Save shifts for a calendar"""
+    # Ensure the shifts directory exists
+    shifts_dir = os.path.join(DATA_DIR, 'shifts')
+    if not os.path.exists(shifts_dir):
+        os.makedirs(shifts_dir)
+        
+    file_path = os.path.join(shifts_dir, f"calendar-{calendar_id}-shifts.json")
     with open(file_path, 'w') as f:
         json.dump(shifts, f, indent=2)
     
     _safe_commit(f"Updated shifts for calendar {calendar_id}")
-    return True
 
 # --- Checklist functions ---
 
@@ -304,14 +331,17 @@ def get_template_checklists(template_id):
         return json.load(f)
 
 def save_template_checklists(template_id, checklists):
-    """Save all checklist items for a template"""
+    """Save checklist items for a template"""
+    # Ensure the checklists directory exists
+    checklists_dir = os.path.join(DATA_DIR, 'checklists')
+    if not os.path.exists(checklists_dir):
+        os.makedirs(checklists_dir)
+        
     file_path = os.path.join(DATA_DIR, 'checklists', f"template-{template_id}-checklists.json")
-    
     with open(file_path, 'w') as f:
         json.dump(checklists, f, indent=2)
     
     _safe_commit(f"Updated checklists for template {template_id}")
-    return True
 
 def get_calendar_checklists(calendar_id):
     """Get all checklist items for a calendar"""
@@ -324,14 +354,17 @@ def get_calendar_checklists(calendar_id):
         return json.load(f)
 
 def save_calendar_checklists(calendar_id, checklists):
-    """Save all checklist items for a calendar"""
+    """Save checklist items for a calendar"""
+    # Ensure the checklists directory exists
+    checklists_dir = os.path.join(DATA_DIR, 'checklists')
+    if not os.path.exists(checklists_dir):
+        os.makedirs(checklists_dir)
+        
     file_path = os.path.join(DATA_DIR, 'checklists', f"calendar-{calendar_id}-checklists.json")
-    
     with open(file_path, 'w') as f:
         json.dump(checklists, f, indent=2)
     
     _safe_commit(f"Updated checklists for calendar {calendar_id}")
-    return True
 
 def get_checklist_item(id):
     """Get a checklist item by ID - search in all calendar and template checklists"""
@@ -421,49 +454,78 @@ def get_all_calendars():
 
 def create_calendar(data):
     """Create a new calendar from a template"""
-    id = _get_next_id('calendar')
-    template_id = data.get('template_id')
-    
-    # Create calendar entity
-    calendar = {
-        'id': id,
-        'name': data.get('name'),
-        'description': data.get('description', ''),
-        'template_id': template_id,
-        'start_date': data.get('start_date'),
-        'created_by': data.get('created_by', 1),  # Default to admin user
-        'created_at': datetime.utcnow().isoformat()
-    }
-    
-    _save_entity('calendar', calendar)
-    
-    # Copy shifts from template
-    template_shifts = get_template_shifts(template_id)
-    calendar_shifts = []
-    
-    for shift in template_shifts:
-        calendar_shift = shift.copy()
-        calendar_shift['calendar_id'] = id
-        calendar_shift['template_id'] = None
-        calendar_shifts.append(calendar_shift)
-    
-    save_calendar_shifts(id, calendar_shifts)
-    
-    # Copy checklists from template
-    template_checklists = get_template_checklists(template_id)
-    calendar_checklists = []
-    
-    for item in template_checklists:
-        calendar_item = item.copy()
-        calendar_item['calendar_id'] = id
-        calendar_item['template_id'] = None
-        calendar_item['id'] = _get_next_id('checklist_item')
-        calendar_item['completed'] = False
-        calendar_checklists.append(calendar_item)
-    
-    save_calendar_checklists(id, calendar_checklists)
-    
-    return calendar
+    try:
+        id = _get_next_id('calendar')
+        template_id = data.get('template_id')
+        
+        # Ensure template_id is correct format
+        if isinstance(template_id, str):
+            template_id = int(template_id)
+        
+        # Create calendar entity
+        calendar = {
+            'id': id,
+            'name': data.get('name'),
+            'description': data.get('description', ''),
+            'template_id': template_id,
+            'start_date': data.get('start_date'),
+            'created_by': data.get('created_by', 1),  # Default to admin user
+            'created_at': datetime.utcnow().isoformat()
+        }
+        
+        # Ensure the calendar directory exists
+        calendars_dir = os.path.join(DATA_DIR, 'calendars')
+        if not os.path.exists(calendars_dir):
+            os.makedirs(calendars_dir)
+            
+        # Ensure the shifts directory exists
+        shifts_dir = os.path.join(DATA_DIR, 'shifts')
+        if not os.path.exists(shifts_dir):
+            os.makedirs(shifts_dir)
+            
+        # Ensure the checklists directory exists
+        checklists_dir = os.path.join(DATA_DIR, 'checklists')
+        if not os.path.exists(checklists_dir):
+            os.makedirs(checklists_dir)
+        
+        _save_entity('calendar', calendar)
+        
+        # Copy shifts from template
+        template_shifts = get_template_shifts(template_id)
+        calendar_shifts = []
+        
+        if template_shifts:
+            for shift in template_shifts:
+                calendar_shift = shift.copy()
+                calendar_shift['calendar_id'] = id
+                calendar_shift['template_id'] = None
+                calendar_shifts.append(calendar_shift)
+        
+        save_calendar_shifts(id, calendar_shifts)
+        
+        # Copy checklists from template
+        template_checklists = get_template_checklists(template_id)
+        calendar_checklists = []
+        
+        if template_checklists:
+            for item in template_checklists:
+                calendar_item = item.copy()
+                calendar_item['calendar_id'] = id
+                calendar_item['template_id'] = None
+                calendar_item['id'] = _get_next_id('checklist_item')
+                calendar_item['completed'] = False
+                calendar_checklists.append(calendar_item)
+        
+        save_calendar_checklists(id, calendar_checklists)
+        
+        # Commit changes
+        _safe_commit(f"Created new calendar: {calendar['name']} (ID: {id})")
+        
+        logging.info(f"Calendar created successfully: ID={id}, Name={calendar['name']}")
+        return calendar
+    except Exception as e:
+        logging.error(f"Error creating calendar: {str(e)}")
+        raise
 
 def delete_calendar(id):
     """Delete a calendar and its related shifts/checklists"""

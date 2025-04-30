@@ -131,6 +131,8 @@ document.addEventListener('DOMContentLoaded', function() {
             start_date: document.getElementById('start_date').value
         };
         
+        console.log('Submitting calendar data:', calendarData);
+        
         // Create calendar
         fetch('{{ url_for("create_calendar") }}', {
             method: 'POST',
@@ -140,19 +142,34 @@ document.addEventListener('DOMContentLoaded', function() {
             },
             body: JSON.stringify(calendarData)
         })
-        .then(response => response.json())
+        .then(response => {
+            console.log('Response status:', response.status);
+            return response.json();
+        })
         .then(data => {
+            console.log('Response data:', data);
             if (data.success) {
+                console.log('Calendar created successfully with ID:', data.calendar.id);
                 // Redirect to calendar view
-                window.location.href = '{{ url_for("view_calendar", id=0) }}'.replace('0', data.calendar_id);
+                window.location.href = '{{ url_for("view_calendar", id=0) }}'.replace('0', data.calendar.id);
             } else {
-                alert('Failed to create calendar: ' + (data.message || 'Unknown error'));
+                console.error('Failed to create calendar:', data);
+                let errorMessage = data.message || 'Unknown error';
+                
+                // Handle validation errors
+                if (data.errors) {
+                    errorMessage = Object.entries(data.errors)
+                        .map(([field, messages]) => `${field}: ${messages.join(', ')}`)
+                        .join('\n');
+                }
+                
+                alert('Failed to create calendar: ' + errorMessage);
                 document.getElementById('loadingOverlay').style.display = 'none';
             }
         })
         .catch(error => {
             console.error('Error creating calendar:', error);
-            alert('An error occurred while creating the calendar.');
+            alert('An error occurred while creating the calendar. Please check the console for details.');
             document.getElementById('loadingOverlay').style.display = 'none';
         });
     });
