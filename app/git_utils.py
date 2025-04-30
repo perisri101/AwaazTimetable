@@ -5,6 +5,7 @@ from datetime import datetime
 import logging
 import traceback
 import sys
+import urllib.parse  # Add this import for URL encoding
 
 # Configure logging with more details
 logging.basicConfig(
@@ -138,11 +139,33 @@ def setup_git_credentials(repo_path):
                 repo_url = subprocess.check_output(['git', 'config', '--get', 'remote.origin.url']).decode('utf-8').strip()
                 logger.info(f"Found remote URL: {repo_url[:8]}... (masked for security)")
                 
-                # Change HTTPS URL to include authentication
+                # Change HTTPS URL to include authentication using credentials helper instead
+                # This is more reliable than embedding credentials in the URL
                 if repo_url.startswith('https://'):
-                    authenticated_url = f'https://{username}:{token[:4]}...@' + repo_url[8:]  # Mask token for logging
-                    logger.info(f"Setting authenticated remote URL: {authenticated_url[:15]}... (masked for security)")
-                    subprocess.run(['git', 'remote', 'set-url', 'origin', f'https://{username}:{token}@{repo_url[8:]}'])
+                    logger.info("Setting up Git credentials using credential helper")
+                    
+                    # Set Git to use credential helper
+                    subprocess.run(['git', 'config', 'credential.helper', 'store'])
+                    
+                    # Extract the hostname (github.com)
+                    host = repo_url.split('//')[1].split('/')[0]
+                    logger.info(f"Using credentials for host: {host}")
+                    
+                    # Create credentials file
+                    cred_path = os.path.expanduser('~/.git-credentials')
+                    
+                    # URL encode the username and token for safety
+                    encoded_username = urllib.parse.quote(username)
+                    encoded_token = urllib.parse.quote(token)
+                    
+                    # Create credentials line
+                    cred_line = f"https://{encoded_username}:{encoded_token}@{host}\n"
+                    
+                    # Write credentials to file
+                    with open(cred_path, 'w') as f:
+                        f.write(cred_line)
+                    
+                    logger.info("Git credentials stored using credential helper")
                     
                     # Test the connection
                     try:
@@ -158,6 +181,29 @@ def setup_git_credentials(repo_path):
                         elif "Authentication failed" in error_msg:
                             logger.error("Authentication failed - check your username and token")
                             logger.error("Make sure your token has 'repo' permissions")
+                            
+                            # Try alternative approach using Git credential.helper directly
+                            logger.info("Trying alternative authentication approach...")
+                            
+                            # Clean up existing auth
+                            subprocess.run(['git', 'config', '--unset', 'credential.helper'])
+                            
+                            # Set up credentials using environment variables
+                            # This approach uses environment variables directly
+                            os.environ['GIT_ASKPASS'] = 'echo'
+                            os.environ['GIT_USERNAME'] = username
+                            os.environ['GIT_PASSWORD'] = token
+                            
+                            # Set remote without credentials in URL
+                            subprocess.run(['git', 'remote', 'set-url', 'origin', repo_url])
+                            logger.info(f"Set remote URL to {repo_url}")
+                            
+                            # Test connection
+                            try:
+                                subprocess.check_output(['git', 'ls-remote', '--heads', 'origin'], stderr=subprocess.PIPE, env=os.environ)
+                                logger.info("Successfully authenticated with alternative method!")
+                            except subprocess.CalledProcessError as inner_e:
+                                logger.error(f"Alternative authentication also failed: {inner_e.stderr.decode('utf-8')}")
             except subprocess.CalledProcessError:
                 logger.warning("No Git remote origin found, remote operations will be disabled")
                 print("No Git remote origin found, remote operations will be disabled")
@@ -166,14 +212,36 @@ def setup_git_credentials(repo_path):
                 repo_url = os.environ.get('GIT_REPO_URL')
                 if repo_url:
                     logger.info(f"Using GIT_REPO_URL from environment: {repo_url[:8]}... (masked for security)")
-                    authenticated_url = f'https://{username}:{token}@' + repo_url.replace('https://', '')
-                    subprocess.run(['git', 'remote', 'add', 'origin', authenticated_url])
+                    
+                    # Set up without embedding credentials in URL
+                    subprocess.run(['git', 'remote', 'add', 'origin', repo_url])
                     logger.info("Added 'origin' remote from environment variable")
+                    
+                    # Set up credentials store
+                    subprocess.run(['git', 'config', 'credential.helper', 'store'])
+                    
+                    # Extract the hostname (github.com)
+                    host = repo_url.split('//')[1].split('/')[0]
+                    
+                    # URL encode the username and token for safety
+                    encoded_username = urllib.parse.quote(username)
+                    encoded_token = urllib.parse.quote(token)
+                    
+                    # Create credentials line
+                    cred_path = os.path.expanduser('~/.git-credentials')
+                    cred_line = f"https://{encoded_username}:{encoded_token}@{host}\n"
+                    
+                    # Write credentials to file
+                    with open(cred_path, 'w') as f:
+                        f.write(cred_line)
+                    
+                    logger.info("Git credentials stored for new remote")
         
         logger.info("Git credentials setup completed successfully")
         return True
     except Exception as e:
         logger.error(f"Git setup failed: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         print(f"Git setup failed, persistence through Git will be disabled: {str(e)}")
         return False
 
