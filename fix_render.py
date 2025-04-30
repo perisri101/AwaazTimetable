@@ -37,12 +37,21 @@ def main():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     print(f"Current directory: {current_dir}")
     
+    # Set up local Git repository
+    print("\n1. Setting up local Git repository...")
+    try:
+        from app.setup_render_repo import setup_local_repo
+        setup_local_repo()
+        print("Local Git repository setup completed")
+    except Exception as e:
+        print(f"Warning: Could not set up local Git repository: {str(e)}")
+    
     # Run database fix script
-    print("\n1. Running database fix script...")
+    print("\n2. Running database fix script...")
     db_fix_success = run_command("python app/fix_db.py", "Database Fix")
     
     # Check for environment variables
-    print("\n2. Checking environment variables...")
+    print("\n3. Checking environment variables...")
     secret_key = os.environ.get('SECRET_KEY')
     if not secret_key:
         print("WARNING: SECRET_KEY environment variable not set. Using default (insecure) key.")
@@ -51,6 +60,7 @@ def main():
     
     # Summary
     print("\n=== Deployment Fix Summary ===")
+    print(f"Local Git repository setup: {'ATTEMPTED' if 'app/setup_render_repo.py' in os.listdir('app') else 'SKIPPED'}")
     print(f"Database fix script: {'SUCCESS' if db_fix_success else 'FAILED'}")
     print(f"Environment variables: {'COMPLETE' if secret_key else 'INCOMPLETE'}")
     

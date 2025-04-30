@@ -62,7 +62,19 @@ def _save_entity(entity_type, entity_data):
     
     # Commit changes if not in bulk operation
     if not os.environ.get('GITDB_BULK_OPERATION'):
-        commit_and_push(f"Updated {entity_type} {entity_data['id']}")
+        try:
+            # Check if current app has Git persistence enabled
+            from flask import current_app
+            git_enabled = current_app.config.get('GIT_PERSISTENCE_ENABLED', False)
+            
+            if git_enabled:
+                commit_and_push(f"Updated {entity_type} {entity_data['id']}")
+            # If git is not enabled, we just saved the file locally which is fine
+        except Exception as e:
+            # If there's any error accessing the app context, just proceed silently
+            # The file is already saved locally at this point
+            print(f"Note: Git persistence skipped: {str(e)}")
+            pass
 
 # --- Caregiver functions ---
 
@@ -134,7 +146,15 @@ def delete_caregiver(id):
         return False
     
     os.remove(file_path)
-    commit_and_push(f"Deleted caregiver {id}")
+    
+    try:
+        from flask import current_app
+        git_enabled = current_app.config.get('GIT_PERSISTENCE_ENABLED', False)
+        if git_enabled:
+            commit_and_push(f"Deleted caregiver {id}")
+    except Exception:
+        pass
+    
     return True
 
 # --- Template functions ---
@@ -209,7 +229,7 @@ def delete_template(id):
         if os.path.exists(f):
             os.remove(f)
     
-    commit_and_push(f"Deleted template {id} and related data")
+    _safe_commit(f"Deleted template {id} and related data")
     return True
 
 # --- Shift functions ---
@@ -231,7 +251,7 @@ def save_template_shifts(template_id, shifts):
     with open(file_path, 'w') as f:
         json.dump(shifts, f, indent=2)
     
-    commit_and_push(f"Updated shifts for template {template_id}")
+    _safe_commit(f"Updated shifts for template {template_id}")
     return True
 
 def get_calendar_shifts(calendar_id):
@@ -251,7 +271,7 @@ def save_calendar_shifts(calendar_id, shifts):
     with open(file_path, 'w') as f:
         json.dump(shifts, f, indent=2)
     
-    commit_and_push(f"Updated shifts for calendar {calendar_id}")
+    _safe_commit(f"Updated shifts for calendar {calendar_id}")
     return True
 
 # --- Checklist functions ---
@@ -273,7 +293,7 @@ def save_template_checklists(template_id, checklists):
     with open(file_path, 'w') as f:
         json.dump(checklists, f, indent=2)
     
-    commit_and_push(f"Updated checklists for template {template_id}")
+    _safe_commit(f"Updated checklists for template {template_id}")
     return True
 
 def get_calendar_checklists(calendar_id):
@@ -293,7 +313,7 @@ def save_calendar_checklists(calendar_id, checklists):
     with open(file_path, 'w') as f:
         json.dump(checklists, f, indent=2)
     
-    commit_and_push(f"Updated checklists for calendar {calendar_id}")
+    _safe_commit(f"Updated checklists for calendar {calendar_id}")
     return True
 
 def get_checklist_item(id):
@@ -352,7 +372,7 @@ def toggle_checklist_item(id):
     with open(checklist_file, 'w') as f:
         json.dump(checklists, f, indent=2)
     
-    commit_and_push(f"Toggled checklist item {id}")
+    _safe_commit(f"Toggled checklist item {id}")
     return item
 
 # --- Calendar functions ---
@@ -444,7 +464,7 @@ def delete_calendar(id):
         if os.path.exists(f):
             os.remove(f)
     
-    commit_and_push(f"Deleted calendar {id} and related data")
+    _safe_commit(f"Deleted calendar {id} and related data")
     return True
 
 # --- Activity Category functions ---
@@ -517,7 +537,7 @@ def delete_activity_category(id):
             return False
     
     os.remove(file_path)
-    commit_and_push(f"Deleted activity category {id}")
+    _safe_commit(f"Deleted activity category {id}")
     return True
 
 # --- Activity functions ---
@@ -594,8 +614,21 @@ def delete_activity(id):
     # For simplicity, we'll just delete the activity for now
     
     os.remove(file_path)
-    commit_and_push(f"Deleted activity {id}")
+    _safe_commit(f"Deleted activity {id}")
     return True
+
+# Function to safely commit changes through Git if enabled
+def _safe_commit(message):
+    """Commit changes using Git if enabled"""
+    try:
+        from flask import current_app
+        git_enabled = current_app.config.get('GIT_PERSISTENCE_ENABLED', False)
+        if git_enabled:
+            from .git_utils import commit_and_push
+            commit_and_push(message)
+    except Exception as e:
+        print(f"Git commit skipped: {str(e)}")
+        pass
 
 # Initialize meta.json if it doesn't exist
 _get_meta() 

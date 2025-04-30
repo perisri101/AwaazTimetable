@@ -30,9 +30,32 @@ csrf = CSRFProtect(app)
 # Initialize Git credentials for the repository
 @app.before_first_request
 def setup_git():
-    from .git_utils import setup_git_credentials
-    repo_path = os.path.dirname(os.path.dirname(__file__))
-    setup_git_credentials(repo_path)
+    try:
+        # First ensure we have a local repository set up
+        try:
+            import importlib.util
+            spec = importlib.util.spec_from_file_location("setup_render_repo", 
+                                                         os.path.join(os.path.dirname(__file__), "setup_render_repo.py"))
+            setup_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(setup_module)
+            setup_module.setup_local_repo()
+            print("Local Git repository setup completed")
+        except Exception as e:
+            print(f"Warning: Could not set up local Git repository: {str(e)}")
+        
+        # Now set up Git credentials
+        from .git_utils import setup_git_credentials
+        repo_path = os.path.dirname(os.path.dirname(__file__))
+        git_available = setup_git_credentials(repo_path)
+        app.config['GIT_PERSISTENCE_ENABLED'] = git_available
+        if not git_available:
+            print("WARNING: Git persistence is disabled, data will only be stored locally")
+        else:
+            print("Git persistence is enabled")
+    except Exception as e:
+        app.config['GIT_PERSISTENCE_ENABLED'] = False
+        print(f"Error setting up Git: {str(e)}")
+        print("WARNING: Git persistence is disabled, data will only be stored locally")
 
 # Initialize database
 def create_tables():
