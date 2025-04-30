@@ -196,9 +196,36 @@ The User authentication system has been removed to simplify deployment and avoid
 ## Tech Stack
 
 - **Backend**: Python with Flask
-- **Database**: SQLAlchemy with SQLite (development) or PostgreSQL (production)
+- **Data Storage**: Git-based JSON file database (no SQL database required)
 - **Frontend**: HTML, CSS, JavaScript, Bootstrap 5
 - **Containerization**: Docker (optional)
+
+## Git-Based Database
+
+This application uses a novel approach to data persistence - using Git as a database! Instead of a traditional SQL database, all data is stored in JSON files in the `data/` directory, and changes are automatically committed and pushed to the Git repository.
+
+### How It Works
+
+1. **Data Storage**: All data is stored as JSON files in subdirectories of the `data/` directory
+2. **Automated Commits**: When data changes, the system automatically creates Git commits
+3. **Persistence**: Because data is committed to Git, it persists even on hosting platforms with ephemeral disks
+4. **Version History**: All data changes are tracked with Git's version history
+
+### Benefits of Git-Based Storage
+
+- **No Database Setup**: No need to configure PostgreSQL or SQLite
+- **Full Persistence**: Data is stored in Git, so it persists regardless of hosting platform limitations
+- **Version History**: Full history of all data changes through Git commits
+- **Simplicity**: No complex database connections or migrations
+
+### For Hosting on Render.com
+
+When hosting on Render.com's free tier, this approach solves the ephemeral storage issue. Since data is stored in the Git repository, it persists between deployments and restarts.
+
+To use this feature, set the following environment variables in Render:
+- `GIT_USERNAME`: Your GitHub username
+- `GIT_EMAIL`: Your GitHub email
+- `GIT_TOKEN`: A GitHub personal access token with repo permissions
 
 ## Project Structure
 
