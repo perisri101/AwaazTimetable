@@ -375,4 +375,119 @@ To run the application using Docker:
 
 ## License
 
-This project is licensed under the MIT License. 
+This project is licensed under the MIT License.
+
+# AwaazTimetable - Git-Based Data Persistence Setup
+
+This guide explains how to set up and troubleshoot the Git-based data persistence system for the AwaazTimetable application.
+
+## Overview
+
+The AwaazTimetable application uses Git to persist data by committing changes to a local repository and pushing them to a remote GitHub repository. This ensures data is preserved even when the Render.com container is restarted.
+
+## Required Environment Variables
+
+For Git persistence to work properly, you need to set the following environment variables in your Render.com dashboard:
+
+1. `GIT_REPO_URL` - URL of your GitHub repository (e.g., `https://github.com/yourusername/AwaazTimetable.git`)
+2. `GIT_USERNAME` - Your GitHub username
+3. `GIT_TOKEN` - A GitHub Personal Access Token with "repo" permissions
+
+Optional:
+- `GIT_EMAIL` - Email to use for Git commits (defaults to `app@awaaz-timetable.com`)
+
+## Setup Process
+
+### 1. Create a GitHub Repository
+
+1. Log in to GitHub
+2. Create a new repository named "AwaazTimetable" (or your preferred name)
+3. Make it private if you want to secure your data
+4. Do not initialize with README, .gitignore, or license
+
+### 2. Create a Personal Access Token
+
+1. Go to GitHub Settings → Developer settings → Personal access tokens → Generate new token
+2. Give it a descriptive name like "AwaazTimetable App"
+3. Select the "repo" scope to allow full access to repositories
+4. Generate the token and copy it - you won't be able to see it again!
+
+### 3. Configure Render.com Environment Variables
+
+In your Render.com dashboard:
+
+1. Go to your AwaazTimetable service
+2. Navigate to Environment → Environment Variables
+3. Add the following variables:
+   - `GIT_REPO_URL=https://github.com/yourusername/AwaazTimetable.git`
+   - `GIT_USERNAME=yourusername`
+   - `GIT_TOKEN=your_personal_access_token`
+4. Save changes and deploy
+
+### 4. Verify the Setup
+
+You can verify your Git setup is working by:
+
+1. Looking at application logs in Render.com for successful Git operations
+2. Checking your GitHub repository to see if data is being pushed
+3. Running the included test script on your local machine:
+
+```bash
+GIT_REPO_URL=https://github.com/yourusername/AwaazTimetable.git \
+GIT_USERNAME=yourusername \
+GIT_TOKEN=your_personal_access_token \
+python test_git_connection.py
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Authentication Failures**
+   - Check that your GitHub token hasn't expired
+   - Verify the token has the "repo" scope
+   - Ensure the username matches the token owner
+
+2. **Repository Not Found**
+   - Verify the repository exists on GitHub
+   - Check if the URL is correct
+   - Ensure your token has access to the repository
+
+3. **Push Failures**
+   - Check if the repository was initialized properly
+   - Verify there are no conflicts between local and remote
+
+4. **No Git Operations in Logs**
+   - Verify all environment variables are set
+   - Check if the application has created a .git directory
+   - Run the diagnostic function to gather more information
+
+### Running Diagnostics
+
+The application includes built-in diagnostic functions. You can run them by:
+
+1. SSH into your Render.com instance or run locally
+2. Navigate to the application directory
+3. Open a Python console:
+   ```python
+   from app.git_utils import run_git_diagnostic
+   run_git_diagnostic()
+   ```
+
+Alternatively, you can run the standalone test script:
+```bash
+python test_git_connection.py
+```
+
+## How It Works
+
+The application:
+
+1. Sets up a local Git repository during initialization
+2. Configures the remote repository based on environment variables
+3. Creates necessary data directories and commits them
+4. Commits changes to data files when operations occur
+5. Pushes commits to the remote repository for persistence
+6. Handles common Git errors and retries operations when needed
+
+All Git operations include detailed logging with clear visual banners indicating the operation being performed and its outcome. 

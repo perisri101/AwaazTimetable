@@ -8,6 +8,11 @@ GIT_REPO_URL=https://github.com/yourusername/AwaazTimetable.git \
 GIT_USERNAME=yourusername \
 GIT_TOKEN=your_personal_access_token \
 python test_git_connection.py
+
+IMPORTANT: Before running this script, make sure:
+1. The repository exists on GitHub (create it if it doesn't exist)
+2. You have the correct access permissions to the repository
+3. Your GIT_TOKEN has the necessary permissions to push to the repository
 """
 
 import os
