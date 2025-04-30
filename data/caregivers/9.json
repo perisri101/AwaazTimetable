@@ -1,0 +1,10 @@
+{
+  "id": 9,
+  "name": "Test Caregiver",
+  "email": "test@example.com",
+  "phone": "555-123-4567",
+  "max_hours_per_week": 40,
+  "max_hours_per_day": 8,
+  "max_days_per_week": 5,
+  "rate": 15.0
+} 
