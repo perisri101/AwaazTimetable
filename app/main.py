@@ -1,12 +1,11 @@
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, session
-from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_wtf.csrf import CSRFProtect
 from datetime import datetime, timedelta, date
 import os
 import json
 import calendar
 from .models import db, User, Caregiver, Template, Calendar, Shift, ChecklistItem, ActivityCategory, Activity
-from .forms import LoginForm, UserForm, CaregiverForm, TemplateForm
+from .forms import TemplateForm, CaregiverForm
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-for-awaaz-flexy-timetable')
@@ -26,15 +25,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
 csrf = CSRFProtect(app)
 
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login'
-
-@login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
-
-# Initialize database and create admin user
+# Initialize database
 def create_tables():
     with app.app_context():
         # Check if we need to add columns to existing database
@@ -81,45 +72,15 @@ def create_tables():
         
         # Create tables
         db.create_all()
-        
-        # Create admin user if not exists
-        if not User.query.filter_by(username='admin').first():
-            admin = User(username='admin', email='admin@example.com', is_admin=True)
-            admin.set_password('admin')
-            db.session.add(admin)
-            db.session.commit()
 
 # Call the function to initialize the database
 create_tables()
 
 @app.route('/')
 def index():
-    return render_template('index.html')
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))
-    
-    form = LoginForm()
-    if form.validate_on_submit():
-        user = User.query.filter_by(username=form.username.data).first()
-        if user and user.check_password(form.password.data):
-            login_user(user)
-            next_page = request.args.get('next')
-            return redirect(next_page or url_for('dashboard'))
-        flash('Invalid username or password')
-    
-    return render_template('login.html', form=form)
-
-@app.route('/logout')
-@login_required
-def logout():
-    logout_user()
-    return redirect(url_for('index'))
+    return redirect(url_for('dashboard'))
 
 @app.route('/dashboard')
-@login_required
 def dashboard():
     templates = Template.query.all()
     calendars = Calendar.query.all()
@@ -127,22 +88,13 @@ def dashboard():
 
 # Management routes for admins
 @app.route('/manage/caregivers')
-@login_required
 def manage_caregivers():
-    if not current_user.is_admin:
-        flash('Access denied')
-        return redirect(url_for('dashboard'))
-    
     caregivers = Caregiver.query.all()
     form = CaregiverForm()
     return render_template('manage_caregivers.html', caregivers=caregivers, form=form)
 
 @app.route('/manage/caregivers/add', methods=['POST'])
-@login_required
 def add_caregiver():
-    if not current_user.is_admin:
-        return jsonify({'success': False, 'message': 'Access denied'}), 403
-    
     # Get JSON data instead of form data
     data = request.json
     
@@ -187,11 +139,7 @@ def add_caregiver():
     return jsonify({'success': True, 'caregiver': caregiver.to_dict()})
 
 @app.route('/manage/caregivers/edit/<int:id>', methods=['POST'])
-@login_required
 def edit_caregiver(id):
-    if not current_user.is_admin:
-        return jsonify({'success': False, 'message': 'Access denied'}), 403
-    
     caregiver = Caregiver.query.get_or_404(id)
     
     # Get JSON data instead of form data
@@ -236,11 +184,7 @@ def edit_caregiver(id):
     return jsonify({'success': True, 'caregiver': caregiver.to_dict()})
 
 @app.route('/manage/caregivers/delete/<int:id>', methods=['POST'])
-@login_required
 def delete_caregiver(id):
-    if not current_user.is_admin:
-        return jsonify({'success': False, 'message': 'Access denied'}), 403
-    
     caregiver = Caregiver.query.get_or_404(id)
     db.session.delete(caregiver)
     db.session.commit()
@@ -248,20 +192,18 @@ def delete_caregiver(id):
 
 # Template routes
 @app.route('/templates')
-@login_required
 def list_templates():
     templates = Template.query.all()
     return render_template('templates/list.html', templates=templates)
 
 @app.route('/templates/new', methods=['GET', 'POST'])
-@login_required
 def new_template():
     form = TemplateForm()
     if form.validate_on_submit():
         template = Template(
             name=form.name.data,
             description=form.description.data,
-            created_by=current_user.id
+            created_by=1  # Default to ID 1 (admin)
         )
         db.session.add(template)
         db.session.commit()
@@ -271,7 +213,6 @@ def new_template():
     return render_template('templates/new.html', form=form)
 
 @app.route('/templates/edit/<int:id>')
-@login_required
 def edit_template(id):
     template = Template.query.get_or_404(id)
     caregivers = Caregiver.query.all()
@@ -279,7 +220,6 @@ def edit_template(id):
 
 @csrf.exempt
 @app.route('/api/templates/<int:id>/shifts')
-@login_required
 def get_template_shifts(id):
     template = Template.query.get_or_404(id)
     return jsonify({
@@ -289,7 +229,6 @@ def get_template_shifts(id):
 
 @csrf.exempt
 @app.route('/api/templates/<int:id>/shifts', methods=['POST'])
-@login_required
 def update_template_shifts(id):
     template = Template.query.get_or_404(id)
     data = request.json
@@ -334,7 +273,6 @@ def update_template_shifts(id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/templates/delete/<int:id>', methods=['POST'])
-@login_required
 def delete_template(id):
     template = Template.query.get_or_404(id)
     
@@ -357,14 +295,12 @@ def delete_template(id):
     return redirect(url_for('list_templates'))
 
 @app.route('/templates/preview/<int:id>')
-@login_required
 def preview_template(id):
     template = Template.query.get_or_404(id)
     caregivers = Caregiver.query.all()
     return render_template('templates/preview.html', template=template, caregivers=caregivers)
 
 @app.route('/api/templates/<int:id>/preview/caregiver/<int:caregiver_id>')
-@login_required
 def preview_template_by_caregiver(id, caregiver_id):
     template = Template.query.get_or_404(id)
     caregiver = Caregiver.query.get_or_404(caregiver_id)
@@ -380,7 +316,6 @@ def preview_template_by_caregiver(id, caregiver_id):
     })
 
 @app.route('/api/templates/<int:id>/preview/day/<int:day>')
-@login_required
 def preview_template_by_day(id, day):
     template = Template.query.get_or_404(id)
     
@@ -404,7 +339,6 @@ def preview_template_by_day(id, day):
     })
 
 @app.route('/api/templates/<int:id>/preview/hour/<int:hour>')
-@login_required
 def preview_template_by_hour(id, hour):
     template = Template.query.get_or_404(id)
     
@@ -431,19 +365,16 @@ def preview_template_by_hour(id, hour):
 
 # Calendar routes
 @app.route('/calendars')
-@login_required
 def list_calendars():
     calendars = Calendar.query.all()
     return render_template('calendars/list.html', calendars=calendars)
 
 @app.route('/calendars/new')
-@login_required
 def new_calendar():
     templates = Template.query.all()
     return render_template('calendars/new.html', templates=templates)
 
 @app.route('/api/calendars/create', methods=['POST'])
-@login_required
 def create_calendar():
     data = request.json
     template = Template.query.get_or_404(data['template_id'])
@@ -453,7 +384,7 @@ def create_calendar():
         description=data.get('description', ''),
         template_id=template.id,
         start_date=datetime.strptime(data['start_date'], '%Y-%m-%d').date(),
-        created_by=current_user.id
+        created_by=1  # Default to ID 1 (admin)
     )
     db.session.add(calendar)
     db.session.commit()
@@ -484,14 +415,12 @@ def create_calendar():
     return jsonify({'success': True, 'calendar_id': calendar.id})
 
 @app.route('/calendars/view/<int:id>')
-@login_required
 def view_calendar(id):
     calendar = Calendar.query.get_or_404(id)
     caregivers = Caregiver.query.all()
     return render_template('calendars/view.html', calendar=calendar, caregivers=caregivers)
 
 @app.route('/api/calendars/<int:id>/shifts')
-@login_required
 def get_calendar_shifts(id):
     calendar = Calendar.query.get_or_404(id)
     return jsonify({
@@ -499,14 +428,25 @@ def get_calendar_shifts(id):
         'checklists': [item.to_dict() for item in calendar.checklist_items]
     })
 
+@app.route('/api/calendars/checklist/<int:item_id>/toggle', methods=['POST'])
+def toggle_checklist_item(item_id):
+    item = ChecklistItem.query.get_or_404(item_id)
+    
+    # Toggle the completion status
+    item.completed = not item.completed
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'item': item.to_dict()
+    })
+
 @app.route('/calendars/reports/<int:id>')
-@login_required
 def calendar_reports(id):
     calendar = Calendar.query.get_or_404(id)
     return render_template('calendars/reports.html', calendar=calendar)
 
 @app.route('/api/calendars/<int:id>/reports')
-@login_required
 def get_calendar_reports(id):
     calendar = Calendar.query.get_or_404(id)
     
@@ -579,7 +519,6 @@ def get_calendar_reports(id):
     })
 
 @app.route('/calendars/delete/<int:id>', methods=['POST'])
-@login_required
 def delete_calendar(id):
     calendar = Calendar.query.get_or_404(id)
     
@@ -598,17 +537,11 @@ def delete_calendar(id):
 
 # Activity Category Management
 @app.route('/manage/activity-categories')
-@login_required
 def manage_activity_categories():
-    if not current_user.is_admin:
-        flash('Access denied')
-        return redirect(url_for('dashboard'))
-    
     categories = ActivityCategory.query.all()
     return render_template('manage_activity_categories.html', categories=categories)
 
 @app.route('/api/activity-categories', methods=['GET'])
-@login_required
 def get_activity_categories():
     categories = ActivityCategory.query.all()
     return jsonify({
@@ -617,11 +550,7 @@ def get_activity_categories():
     })
 
 @app.route('/api/activity-categories', methods=['POST'])
-@login_required
 def add_activity_category():
-    if not current_user.is_admin:
-        return jsonify({'success': False, 'message': 'Access denied'}), 403
-    
     data = request.json
     
     if not data.get('name'):
@@ -630,7 +559,7 @@ def add_activity_category():
     category = ActivityCategory(
         name=data.get('name'),
         description=data.get('description', ''),
-        created_by=current_user.id
+        created_by=1  # Default to ID 1 (admin)
     )
     
     db.session.add(category)
@@ -639,11 +568,7 @@ def add_activity_category():
     return jsonify({'success': True, 'category': category.to_dict()})
 
 @app.route('/api/activity-categories/<int:id>', methods=['PUT'])
-@login_required
 def update_activity_category(id):
-    if not current_user.is_admin:
-        return jsonify({'success': False, 'message': 'Access denied'}), 403
-    
     category = ActivityCategory.query.get_or_404(id)
     data = request.json
     
@@ -658,11 +583,7 @@ def update_activity_category(id):
     return jsonify({'success': True, 'category': category.to_dict()})
 
 @app.route('/api/activity-categories/<int:id>', methods=['DELETE'])
-@login_required
 def delete_activity_category(id):
-    if not current_user.is_admin:
-        return jsonify({'success': False, 'message': 'Access denied'}), 403
-    
     category = ActivityCategory.query.get_or_404(id)
     
     # Check if category has activities
@@ -679,18 +600,12 @@ def delete_activity_category(id):
 
 # Activity Management
 @app.route('/manage/activities')
-@login_required
 def manage_activities():
-    if not current_user.is_admin:
-        flash('Access denied')
-        return redirect(url_for('dashboard'))
-    
     activities = Activity.query.all()
     categories = ActivityCategory.query.all()
     return render_template('manage_activities.html', activities=activities, categories=categories)
 
 @app.route('/api/activities', methods=['GET'])
-@login_required
 def get_activities():
     activities = Activity.query.all()
     return jsonify({
@@ -699,7 +614,6 @@ def get_activities():
     })
 
 @app.route('/api/activities/by-category/<int:category_id>', methods=['GET'])
-@login_required
 def get_activities_by_category(category_id):
     activities = Activity.query.filter_by(category_id=category_id).all()
     return jsonify({
@@ -708,11 +622,7 @@ def get_activities_by_category(category_id):
     })
 
 @app.route('/api/activities', methods=['POST'])
-@login_required
 def add_activity():
-    if not current_user.is_admin:
-        return jsonify({'success': False, 'message': 'Access denied'}), 403
-    
     data = request.json
     
     if not data.get('name'):
@@ -730,7 +640,7 @@ def add_activity():
         name=data.get('name'),
         description=data.get('description', ''),
         category_id=data.get('category_id'),
-        created_by=current_user.id
+        created_by=1  # Default to ID 1 (admin)
     )
     
     db.session.add(activity)
@@ -739,11 +649,7 @@ def add_activity():
     return jsonify({'success': True, 'activity': activity.to_dict()})
 
 @app.route('/api/activities/<int:id>', methods=['PUT'])
-@login_required
 def update_activity(id):
-    if not current_user.is_admin:
-        return jsonify({'success': False, 'message': 'Access denied'}), 403
-    
     activity = Activity.query.get_or_404(id)
     data = request.json
     
@@ -767,11 +673,7 @@ def update_activity(id):
     return jsonify({'success': True, 'activity': activity.to_dict()})
 
 @app.route('/api/activities/<int:id>', methods=['DELETE'])
-@login_required
 def delete_activity(id):
-    if not current_user.is_admin:
-        return jsonify({'success': False, 'message': 'Access denied'}), 403
-    
     activity = Activity.query.get_or_404(id)
     
     # Check if activity is used in any checklist items

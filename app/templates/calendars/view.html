@@ -417,8 +417,30 @@ document.addEventListener('DOMContentLoaded', function() {
             item.completed = completed;
         }
         
-        // TODO: Send update to server (will be implemented in a future API endpoint)
-        console.log(`Item ${itemId} marked as ${completed ? 'completed' : 'incomplete'}`);
+        // Send update to server
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+        fetch(`/api/calendars/checklist/${itemId}/toggle`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success) {
+                console.error('Error toggling checklist item:', data);
+                // Revert UI if there was an error
+                if (item) {
+                    item.completed = !completed;
+                    const checkbox = document.querySelector(`.checklist-toggle[data-item-id="${itemId}"]`);
+                    if (checkbox) checkbox.checked = !completed;
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error toggling checklist item:', error);
+        });
     }
 });
 </script>
