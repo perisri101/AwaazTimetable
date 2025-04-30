@@ -859,5 +859,109 @@ def inject_user():
     }
     return {'current_user': current_user}
 
+# Git Test routes
+@app.route('/git-test')
+def git_test():
+    """
+    Git test page for testing Git persistence
+    """
+    try:
+        # Get recent Git test entries
+        entries = gitdb.get_all_git_test_entries()
+        
+        # Get Git status
+        git_status = gitdb.get_git_status()
+        
+        return render_template(
+            'git_test.html', 
+            entries=entries[:10],  # Show only the 10 most recent entries
+            git_persistence_enabled=git_status.get('git_persistence_enabled', False),
+            last_commit=git_status.get('last_commit', 'Unknown'),
+            last_push=git_status.get('last_push', 'Unknown')
+        )
+    except Exception as e:
+        app.logger.error(f"Error loading Git test page: {str(e)}")
+        flash(f"Error loading Git test page: {str(e)}", "danger")
+        return redirect(url_for('dashboard'))
+
+@app.route('/api/git-test/save', methods=['POST'])
+def save_git_test():
+    """
+    Save Git test entry API
+    """
+    try:
+        data = request.json
+        
+        # Validate data
+        if not data:
+            return jsonify({'success': False, 'message': 'No data provided'}), 400
+        
+        if not data.get('title'):
+            return jsonify({'success': False, 'message': 'Title is required'}), 400
+        
+        if not data.get('content'):
+            return jsonify({'success': False, 'message': 'Content is required'}), 400
+        
+        # Save entry
+        entry, git_committed = gitdb.save_git_test_entry(data)
+        
+        # Try to get the commit hash
+        commit_hash = None
+        try:
+            if git_committed:
+                import subprocess
+                result = subprocess.run(
+                    ['git', 'rev-parse', '--short', 'HEAD'],
+                    cwd=os.path.dirname(os.path.dirname(__file__)),
+                    capture_output=True,
+                    text=True,
+                    check=True
+                )
+                commit_hash = result.stdout.strip()
+        except Exception as e:
+            app.logger.error(f"Error getting commit hash: {str(e)}")
+        
+        return jsonify({
+            'success': True, 
+            'entry': entry,
+            'git_committed': git_committed,
+            'commit_hash': commit_hash
+        })
+    except Exception as e:
+        app.logger.error(f"Error saving Git test entry: {str(e)}")
+        return jsonify({'success': False, 'message': f"Error: {str(e)}"}), 500
+
+@app.route('/api/git-test/entries')
+def get_git_test_entries():
+    """
+    Get Git test entries API
+    """
+    try:
+        entries = gitdb.get_all_git_test_entries()
+        return jsonify({
+            'success': True,
+            'entries': entries[:10]  # Show only the 10 most recent entries
+        })
+    except Exception as e:
+        app.logger.error(f"Error getting Git test entries: {str(e)}")
+        return jsonify({'success': False, 'message': f"Error: {str(e)}"}), 500
+
+@app.route('/api/git-test/status')
+def get_git_test_status():
+    """
+    Get Git repository status API
+    """
+    try:
+        status = gitdb.get_git_status()
+        return jsonify({
+            'success': True,
+            'git_persistence_enabled': status.get('git_persistence_enabled', False),
+            'last_commit': status.get('last_commit', 'Unknown'),
+            'last_push': status.get('last_push', 'Unknown')
+        })
+    except Exception as e:
+        app.logger.error(f"Error getting Git status: {str(e)}")
+        return jsonify({'success': False, 'message': f"Error: {str(e)}"}), 500
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0') 

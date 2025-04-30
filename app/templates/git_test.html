@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+
+{% block title %}Git Persistence Test - Awaaz Flexy Timetable{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-8">
+        <h1>Git Persistence Test</h1>
+        <p class="lead">Test Git persistence by saving free-form text to the repository</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="mb-0">Submit Test Data</h3>
+            </div>
+            <div class="card-body">
+                <form id="gitTestForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    
+                    <div class="mb-3">
+                        <label for="title" class="form-label">Title</label>
+                        <input type="text" class="form-control" id="title" name="title" required>
+                        <div class="invalid-feedback" id="title-feedback"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="content" class="form-label">Content</label>
+                        <textarea class="form-control" id="content" name="content" rows="8" required></textarea>
+                        <div class="invalid-feedback" id="content-feedback"></div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" id="saveTestDataBtn">
+                        <i class="bi bi-save"></i> Save to Git
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="mb-0">Recent Git Test Entries</h3>
+            </div>
+            <div class="card-body">
+                <div id="recentEntries">
+                    {% if entries %}
+                        {% for entry in entries %}
+                            <div class="border rounded p-3 mb-3">
+                                <h5>{{ entry.title }}</h5>
+                                <div class="small text-muted mb-2">
+                                    <i class="bi bi-clock"></i> {{ entry.timestamp }}
+                                </div>
+                                <p class="mb-0">{{ entry.content }}</p>
+                            </div>
+                        {% endfor %}
+                    {% else %}
+                        <p class="text-muted">No entries yet. Create your first entry using the form.</p>
+                    {% endif %}
+                </div>
+                <button type="button" class="btn btn-outline-primary mt-3" id="refreshEntriesBtn">
+                    <i class="bi bi-arrow-repeat"></i> Refresh Entries
+                </button>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h3 class="mb-0">Git Status</h3>
+            </div>
+            <div class="card-body">
+                <div id="gitStatus">
+                    <p><strong>Git Persistence:</strong> <span id="gitPersistenceStatus">{{ 'Enabled' if git_persistence_enabled else 'Disabled' }}</span></p>
+                    <p><strong>Last Commit:</strong> <span id="lastCommitInfo">{{ last_commit }}</span></p>
+                    <p><strong>Last Push:</strong> <span id="lastPushInfo">{{ last_push }}</span></p>
+                </div>
+                <button type="button" class="btn btn-outline-secondary mt-2" id="checkGitStatusBtn">
+                    <i class="bi bi-git"></i> Check Git Status
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Setup CSRF token for all AJAX requests
+    const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+    
+    // Handle form submission
+    document.getElementById('gitTestForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const titleInput = document.getElementById('title');
+        const contentInput = document.getElementById('content');
+        
+        // Reset feedback
+        titleInput.classList.remove('is-invalid');
+        contentInput.classList.remove('is-invalid');
+        document.getElementById('title-feedback').textContent = '';
+        document.getElementById('content-feedback').textContent = '';
+        
+        // Validate
+        let isValid = true;
+        
+        if (!titleInput.value.trim()) {
+            titleInput.classList.add('is-invalid');
+            document.getElementById('title-feedback').textContent = 'Title is required';
+            isValid = false;
+        }
+        
+        if (!contentInput.value.trim()) {
+            contentInput.classList.add('is-invalid');
+            document.getElementById('content-feedback').textContent = 'Content is required';
+            isValid = false;
+        }
+        
+        if (!isValid) return;
+        
+        // Disable button during submission
+        const submitBtn = document.getElementById('saveTestDataBtn');
+        const originalBtnText = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="bi bi-hourglass"></i> Saving...';
+        
+        // Prepare data
+        const data = {
+            title: titleInput.value.trim(),
+            content: contentInput.value.trim()
+        };
+        
+        // Send request
+        fetch('/api/git-test/save', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Re-enable button
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalBtnText;
+            
+            if (data.success) {
+                // Clear form
+                titleInput.value = '';
+                contentInput.value = '';
+                
+                // Show success message
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'alert alert-success alert-dismissible fade show';
+                alertDiv.innerHTML = `
+                    Entry saved successfully! Git commit: ${data.commit_hash || 'N/A'}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                document.querySelector('.main-content').insertBefore(alertDiv, document.querySelector('.main-content').firstChild);
+                
+                // Refresh entries
+                fetchRecentEntries();
+                
+                // Update Git status
+                fetchGitStatus();
+            } else {
+                // Show error
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'alert alert-danger alert-dismissible fade show';
+                alertDiv.innerHTML = `
+                    ${data.message || 'Error saving entry'}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                document.querySelector('.main-content').insertBefore(alertDiv, document.querySelector('.main-content').firstChild);
+            }
+        })
+        .catch(error => {
+            console.error('Error saving entry:', error);
+            
+            // Re-enable button
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalBtnText;
+            
+            // Show error message
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-danger alert-dismissible fade show';
+            alertDiv.innerHTML = `
+                An error occurred while saving the entry. Please try again.
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.querySelector('.main-content').insertBefore(alertDiv, document.querySelector('.main-content').firstChild);
+        });
+    });
+    
+    // Refresh entries button
+    document.getElementById('refreshEntriesBtn').addEventListener('click', function() {
+        const button = this;
+        const originalText = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = '<i class="bi bi-hourglass"></i> Loading...';
+        
+        fetchRecentEntries(function() {
+            button.disabled = false;
+            button.innerHTML = originalText;
+        });
+    });
+    
+    // Check Git status button
+    document.getElementById('checkGitStatusBtn').addEventListener('click', function() {
+        const button = this;
+        const originalText = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = '<i class="bi bi-hourglass"></i> Checking...';
+        
+        fetchGitStatus(function() {
+            button.disabled = false;
+            button.innerHTML = originalText;
+        });
+    });
+    
+    // Function to fetch recent entries
+    function fetchRecentEntries(callback) {
+        fetch('/api/git-test/entries')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update entries list
+                    const entriesContainer = document.getElementById('recentEntries');
+                    
+                    if (data.entries && data.entries.length > 0) {
+                        let entriesHtml = '';
+                        
+                        data.entries.forEach(entry => {
+                            entriesHtml += `
+                                <div class="border rounded p-3 mb-3">
+                                    <h5>${entry.title}</h5>
+                                    <div class="small text-muted mb-2">
+                                        <i class="bi bi-clock"></i> ${entry.timestamp}
+                                    </div>
+                                    <p class="mb-0">${entry.content}</p>
+                                </div>
+                            `;
+                        });
+                        
+                        entriesContainer.innerHTML = entriesHtml;
+                    } else {
+                        entriesContainer.innerHTML = '<p class="text-muted">No entries yet. Create your first entry using the form.</p>';
+                    }
+                } else {
+                    console.error('Error fetching entries:', data.message);
+                }
+                
+                if (callback) callback();
+            })
+            .catch(error => {
+                console.error('Error fetching entries:', error);
+                if (callback) callback();
+            });
+    }
+    
+    // Function to fetch Git status
+    function fetchGitStatus(callback) {
+        fetch('/api/git-test/status')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update Git status
+                    document.getElementById('gitPersistenceStatus').textContent = data.git_persistence_enabled ? 'Enabled' : 'Disabled';
+                    document.getElementById('lastCommitInfo').textContent = data.last_commit || 'N/A';
+                    document.getElementById('lastPushInfo').textContent = data.last_push || 'N/A';
+                } else {
+                    console.error('Error fetching Git status:', data.message);
+                }
+                
+                if (callback) callback();
+            })
+            .catch(error => {
+                console.error('Error fetching Git status:', error);
+                if (callback) callback();
+            });
+    }
+});
+</script>
+{% endblock %} 

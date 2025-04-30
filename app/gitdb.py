@@ -731,4 +731,173 @@ def _safe_commit(message):
         return False
 
 # Initialize meta.json if it doesn't exist
-_get_meta() 
+_get_meta()
+
+# Git Test Entries
+def save_git_test_entry(entry_data):
+    """
+    Save a Git test entry to the Git repository
+    """
+    logger.info(f"[GitDB] Saving Git test entry: {entry_data.get('title', 'Untitled')}")
+    
+    try:
+        # Add timestamp
+        entry_data['timestamp'] = datetime.utcnow().isoformat()
+        
+        # Generate a unique ID
+        entry_id = _get_next_id('git_test')
+        entry_data['id'] = entry_id
+        
+        # Create directory for Git test entries if it doesn't exist
+        test_dir = os.path.join(DATA_DIR, 'git_test')
+        os.makedirs(test_dir, exist_ok=True)
+        
+        # Save the entry to a JSON file
+        file_path = os.path.join(test_dir, f"{entry_id}.json")
+        with open(file_path, 'w') as f:
+            json.dump(entry_data, f, indent=2)
+        
+        logger.info(f"[GitDB] Git test entry saved to {file_path}")
+        
+        # Commit the change to Git if Git persistence is enabled
+        try:
+            from flask import current_app
+            if current_app.config.get('GIT_PERSISTENCE_ENABLED', False):
+                from .git_utils import commit_and_push
+                message = f"Add Git test entry: {entry_data.get('title', 'Untitled')}"
+                commit_success = commit_and_push(message)
+                
+                if commit_success:
+                    logger.info(f"[GitDB] Git test entry committed to Git repository")
+                    return entry_data, True  # Return entry data and Git commit status
+                else:
+                    logger.warning(f"[GitDB] Git test entry saved locally but not committed to Git")
+                    return entry_data, False  # Entry saved but not committed
+            else:
+                logger.info(f"[GitDB] Git persistence is disabled, test entry saved locally only")
+                return entry_data, False  # Git persistence is disabled
+        except Exception as e:
+            logger.error(f"[GitDB] Error committing Git test entry: {str(e)}")
+            return entry_data, False  # Entry saved but not committed due to error
+    
+    except Exception as e:
+        logger.error(f"[GitDB] Error saving Git test entry: {str(e)}")
+        raise e
+
+def get_all_git_test_entries():
+    """
+    Get all Git test entries
+    """
+    logger.info(f"[GitDB] Retrieving all Git test entries")
+    
+    try:
+        # Get the directory for Git test entries
+        test_dir = os.path.join(DATA_DIR, 'git_test')
+        
+        # If directory doesn't exist, return empty list
+        if not os.path.exists(test_dir):
+            logger.info(f"[GitDB] Git test directory doesn't exist, returning empty list")
+            return []
+        
+        # Get all JSON files in the directory
+        entries = []
+        for filename in os.listdir(test_dir):
+            if filename.endswith('.json'):
+                file_path = os.path.join(test_dir, filename)
+                try:
+                    with open(file_path, 'r') as f:
+                        entry = json.load(f)
+                        entries.append(entry)
+                except Exception as e:
+                    logger.error(f"[GitDB] Error reading Git test entry {file_path}: {str(e)}")
+        
+        # Sort entries by timestamp, newest first
+        entries.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+        
+        logger.info(f"[GitDB] Retrieved {len(entries)} Git test entries")
+        return entries
+    
+    except Exception as e:
+        logger.error(f"[GitDB] Error retrieving Git test entries: {str(e)}")
+        raise e
+
+def get_git_status():
+    """
+    Get Git repository status
+    """
+    logger.info(f"[GitDB] Getting Git repository status")
+    
+    try:
+        from flask import current_app
+        git_persistence_enabled = current_app.config.get('GIT_PERSISTENCE_ENABLED', False)
+        
+        if not git_persistence_enabled:
+            logger.info(f"[GitDB] Git persistence is disabled")
+            return {
+                'git_persistence_enabled': False,
+                'last_commit': 'Git persistence is disabled',
+                'last_push': 'Git persistence is disabled'
+            }
+        
+        # Get last commit info
+        try:
+            import subprocess
+            
+            # Get last commit hash and message
+            result = subprocess.run(
+                ['git', 'log', '-1', '--pretty=format:%h - %s (%ar)'],
+                cwd=os.path.dirname(DATA_DIR),
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            last_commit = result.stdout.strip() if result.stdout else 'No commits yet'
+            
+            # Check if there are unpushed commits
+            result = subprocess.run(
+                ['git', 'log', '@{u}..HEAD', '--pretty=format:%h - %s'],
+                cwd=os.path.dirname(DATA_DIR),
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode == 0 and result.stdout:
+                # There are unpushed commits
+                unpushed_count = len(result.stdout.strip().split('\n'))
+                last_push = f"⚠️ {unpushed_count} unpushed commit(s)"
+            else:
+                # No unpushed commits or error checking
+                last_push = "All commits pushed to remote"
+            
+            return {
+                'git_persistence_enabled': True,
+                'last_commit': last_commit,
+                'last_push': last_push
+            }
+            
+        except subprocess.CalledProcessError as e:
+            logger.error(f"[GitDB] Error getting Git status: {str(e)}")
+            if e.stderr:
+                logger.error(f"[GitDB] Git error details: {e.stderr}")
+            
+            return {
+                'git_persistence_enabled': True,
+                'last_commit': 'Error getting commit info',
+                'last_push': 'Error getting push info'
+            }
+            
+        except Exception as e:
+            logger.error(f"[GitDB] Error getting Git status: {str(e)}")
+            return {
+                'git_persistence_enabled': True,
+                'last_commit': f"Error: {str(e)}",
+                'last_push': f"Error: {str(e)}"
+            }
+    
+    except Exception as e:
+        logger.error(f"[GitDB] Error getting Git status: {str(e)}")
+        return {
+            'git_persistence_enabled': False,
+            'last_commit': f"Error: {str(e)}",
+            'last_push': f"Error: {str(e)}"
+        } 
