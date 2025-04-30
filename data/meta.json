@@ -1,0 +1,11 @@
+{
+  "next_ids": {
+    "caregiver": 1,
+    "template": 1,
+    "calendar": 1,
+    "shift": 1,
+    "checklist_item": 1,
+    "activity": 1,
+    "activity_category": 1
+  }
+} 
