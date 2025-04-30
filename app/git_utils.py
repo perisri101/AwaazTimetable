@@ -90,7 +90,7 @@ def commit_and_push(message):
         else:
             logger.info("Local commit successful")
         
-        # Check if we have origin remote before trying to pull/push
+        # Check if remote repo is configured
         try:
             logger.debug("Checking Git remotes")
             remotes = subprocess.check_output(['git', 'remote']).decode('utf-8').strip()
@@ -98,15 +98,29 @@ def commit_and_push(message):
                 logger.warning("No 'origin' remote found, skipping pull/push")
                 print("No 'origin' remote found, skipping pull/push")
                 return True  # Still return True since we committed locally
+            
+            # Get remote URL to verify it's configured
+            remote_url = subprocess.check_output(['git', 'config', '--get', 'remote.origin.url']).decode('utf-8').strip()
+            logger.info(f"Remote URL configured: {remote_url[:8]}... (masked for security)")
         except subprocess.CalledProcessError:
             logger.warning("Unable to check Git remotes, skipping pull/push")
             print("Unable to check Git remotes, skipping pull/push")
             return True  # Still return True since we committed locally
         
+        # Get current branch name
+        try:
+            branch_name = subprocess.check_output(['git', 'branch', '--show-current']).decode('utf-8').strip()
+            if not branch_name:
+                branch_name = 'main'  # Default branch name if not available
+            logger.info(f"Current branch: {branch_name}")
+        except subprocess.CalledProcessError:
+            branch_name = 'main'  # Default branch name if command fails
+            logger.info(f"Could not determine branch name, using default: {branch_name}")
+        
         # Pull latest changes
         try:
-            logger.info("Pulling latest changes from remote")
-            result = subprocess.run(['git', 'pull', '--rebase', 'origin', 'main'], capture_output=True, text=True)
+            logger.info(f"Pulling latest changes from remote branch 'origin/{branch_name}'")
+            result = subprocess.run(['git', 'pull', '--rebase', 'origin', branch_name], capture_output=True, text=True)
             if result.returncode != 0:
                 logger.warning(f"Git pull error: {result.stderr}")
                 print(f"Git pull error: {result.stderr}")
@@ -124,22 +138,39 @@ def commit_and_push(message):
         logger.info(f"Pushing changes to remote, max attempts: {max_attempts}")
         for attempt in range(max_attempts):
             try:
-                logger.info(f"Push attempt {attempt+1}/{max_attempts}")
-                result = subprocess.run(['git', 'push', 'origin', 'main'], capture_output=True, text=True)
+                logger.info(f"Push attempt {attempt+1}/{max_attempts} to branch 'origin/{branch_name}'")
+                
+                # Add -u flag to set up tracking for the first push
+                if attempt == 0:
+                    result = subprocess.run(['git', 'push', '-u', 'origin', branch_name], capture_output=True, text=True)
+                else:
+                    result = subprocess.run(['git', 'push', 'origin', branch_name], capture_output=True, text=True)
+                
                 if result.returncode == 0:
-                    logger.info("Push successful!")
-                    print("Git push successful!")
+                    logger.info(f"Push successful to 'origin/{branch_name}'!")
+                    print(f"Git push successful to branch '{branch_name}'!")
                     return True
                 
-                logger.warning(f"Git push error (attempt {attempt+1}/{max_attempts}): {result.stderr}")
-                print(f"Git push error (attempt {attempt+1}/{max_attempts}): {result.stderr}")
+                # Check for specific push errors
+                error_msg = result.stderr
+                logger.warning(f"Git push error (attempt {attempt+1}/{max_attempts}): {error_msg}")
+                print(f"Git push error (attempt {attempt+1}/{max_attempts}): {error_msg}")
+                
+                # Handle different error cases
+                if "rejected" in error_msg and "would be overwritten by merge" in error_msg:
+                    # Handle non-fast-forward error (remote has changes that local doesn't)
+                    logger.info("Attempting to pull and merge changes before pushing again")
+                    subprocess.run(['git', 'pull', '--no-rebase', 'origin', branch_name], capture_output=True, text=True)
+                elif "Permission denied" in error_msg:
+                    logger.error("Permission denied error - check Git credentials")
+                    break  # Stop trying, credentials issue
+                
                 if attempt < max_attempts - 1:
                     logger.info(f"Waiting 3 seconds before retry...")
-                    # Wait before retry
                     time.sleep(3)
-            except subprocess.CalledProcessError:
-                logger.warning(f"Git push failed (attempt {attempt+1}/{max_attempts})")
-                print(f"Git push failed (attempt {attempt+1}/{max_attempts})")
+            except subprocess.CalledProcessError as e:
+                logger.warning(f"Git push failed (attempt {attempt+1}/{max_attempts}): {str(e)}")
+                print(f"Git push failed (attempt {attempt+1}/{max_attempts}): {str(e)}")
                 if attempt < max_attempts - 1:
                     time.sleep(3)
         

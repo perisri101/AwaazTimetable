@@ -102,6 +102,11 @@ def setup_local_repo():
     app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     os.chdir(app_dir)
     
+    # Check if remote repo URL is configured in environment
+    git_repo_url = os.environ.get('GIT_REPO_URL')
+    username = os.environ.get('GIT_USERNAME')
+    token = os.environ.get('GIT_TOKEN')
+    
     # Check if .git directory exists and is properly set up
     if not os.path.isdir('.git'):
         logger.warning("No .git directory found. Setting up local Git repository...")
@@ -147,6 +152,53 @@ def setup_local_repo():
             run_command(f'git config user.name "{name}"')
             logger.info("Git user configured.")
     
+    # Set up remote repository if URL is provided
+    if git_repo_url:
+        # Check if origin remote exists
+        remotes = run_command("git remote")
+        if "origin" not in remotes.split():
+            logger.info(f"Setting up remote repository URL: {git_repo_url}")
+            
+            # If GitHub token is provided, use authenticated URL
+            if username and token and git_repo_url.startswith('https://'):
+                # Format: https://username:token@github.com/username/repo.git
+                auth_url = git_repo_url.replace('https://', f'https://{username}:{token}@')
+                logger.info(f"Using authenticated URL for remote (token masked)")
+                run_command(f'git remote add origin "{auth_url}"')
+            else:
+                run_command(f'git remote add origin "{git_repo_url}"')
+            
+            logger.info("Remote repository 'origin' configured successfully")
+        else:
+            # Update existing remote if needed
+            current_url = run_command("git config --get remote.origin.url")
+            if current_url != git_repo_url and username and token and git_repo_url.startswith('https://'):
+                # Update with authenticated URL
+                auth_url = git_repo_url.replace('https://', f'https://{username}:{token}@')
+                logger.info(f"Updating remote origin URL to authenticated URL (token masked)")
+                run_command(f'git remote set-url origin "{auth_url}"')
+            
+            logger.info("Remote repository 'origin' already exists")
+            
+        # Try to fetch from remote to verify connection
+        fetch_result = run_command("git fetch origin")
+        if fetch_result is not None:
+            logger.info("Successfully connected to remote repository")
+        
+        # Set up tracking relationship if this is a new repo
+        current_branch = run_command("git branch --show-current") or "main"
+        tracking_branch = run_command(f"git rev-parse --abbrev-ref {current_branch}@{{upstream}}")
+        if not tracking_branch:
+            logger.info(f"Setting up tracking relationship for branch '{current_branch}'")
+            try:
+                # Try to set up tracking with the remote branch
+                run_command(f"git branch --set-upstream-to=origin/{current_branch} {current_branch}")
+            except:
+                # If remote branch doesn't exist yet, we'll create it later
+                logger.info(f"Remote branch 'origin/{current_branch}' not found. Will push to create it.")
+    else:
+        logger.warning("No GIT_REPO_URL environment variable found. Only local Git operations will be available.")
+    
     # Make sure the data directory exists and is tracked
     data_dir = os.path.join(app_dir, 'data')
     if not os.path.exists(data_dir):
@@ -176,6 +228,13 @@ def setup_local_repo():
     if status:
         logger.info("Committing data directory changes")
         run_command('git commit -m "Update data files"')
+        
+        # Try to push to remote if configured
+        if git_repo_url:
+            logger.info("Attempting to push changes to remote repository")
+            push_result = run_command("git push -u origin HEAD")
+            if push_result is not None:
+                logger.info("Successfully pushed changes to remote repository")
     
     # Run diagnostics
     run_git_diagnostic()
