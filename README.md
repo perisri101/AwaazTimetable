@@ -158,6 +158,31 @@ python git_health_check.py --fix
    - Verify your GitHub username and token
    - Ensure the token hasn't expired
 
+## Activity Categories Directory Fix
+
+The application had an inconsistency in how activity categories were stored. The issue was:
+
+- The `_save_entity` function stored activity categories in a directory called `activity_categorys` (incorrect plural)
+- The retrieval functions looked for files in a directory called `activity_categories` (correct plural)
+
+This has been fixed by:
+
+1. Modifying the `_save_entity` function to use the correct plural form for activity categories
+2. Creating a `fix_activity_categories.py` script that moves any existing files from the incorrect to the correct directory
+
+If you encounter missing activity categories, you can run the fix script:
+
+```bash
+python fix_activity_categories.py
+```
+
+This script will:
+- Move any JSON files from `data/activity_categorys/` to `data/activity_categories/`
+- Remove the incorrect directory
+- Log the operations performed
+
+The issue has been fixed in the code, so this should only be needed for existing deployments.
+
 ## Project Structure
 
 ```

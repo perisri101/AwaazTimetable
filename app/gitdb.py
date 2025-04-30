@@ -75,7 +75,15 @@ def _save_entity(entity_type, entity_data):
         id = entity_data['id']
         
         # Ensure the directory exists
-        entity_dir = os.path.join(DATA_DIR, f"{entity_type}s")
+        # Handle special case for activity_category => activity_categories
+        # This is necessary because the normal pluralization (entity_type + 's')
+        # would result in 'activity_categorys' which is grammatically incorrect.
+        # Other functions like get_activity_category already use 'activity_categories'.
+        if entity_type == 'activity_category':
+            entity_dir = os.path.join(DATA_DIR, 'activity_categories')
+        else:
+            entity_dir = os.path.join(DATA_DIR, f"{entity_type}s")
+            
         if not os.path.exists(entity_dir):
             logging.info(f"Creating directory for {entity_type}s: {entity_dir}")
             os.makedirs(entity_dir)
