@@ -4,6 +4,7 @@ import shutil
 import logging
 from datetime import datetime
 from .git_utils import commit_and_push
+import traceback
 
 # Configure logging
 logging.basicConfig(
@@ -17,7 +18,7 @@ DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 
 # Ensure data directories exist
 for dir_name in ['caregivers', 'templates', 'calendars', 'shifts', 'checklists', 
-                 'activities', 'activity_categories']:
+                 'activities', 'activity_categories', 'git_test']:
     os.makedirs(os.path.join(DATA_DIR, dir_name), exist_ok=True)
 
 def _get_meta():
@@ -38,14 +39,22 @@ def _get_meta():
                 'shift': 1,
                 'checklist_item': 1,
                 'activity': 1,
-                'activity_category': 1
+                'activity_category': 1,
+                'git_test': 1  # Add git_test to the list of entity types
             }
         }
         _save_meta(meta)
         return meta
     
     with open(meta_path, 'r') as f:
-        return json.load(f)
+        data = json.load(f)
+        
+    # Check if git_test is in the next_ids, if not add it
+    if 'git_test' not in data['next_ids']:
+        data['next_ids']['git_test'] = 1
+        _save_meta(data)
+        
+    return data
 
 def _save_meta(meta):
     """Save meta.json file"""
@@ -745,19 +754,50 @@ def save_git_test_entry(entry_data):
         entry_data['timestamp'] = datetime.utcnow().isoformat()
         
         # Generate a unique ID
-        entry_id = _get_next_id('git_test')
-        entry_data['id'] = entry_id
+        try:
+            entry_id = _get_next_id('git_test')
+            logger.info(f"[GitDB] Generated ID for Git test entry: {entry_id}")
+            entry_data['id'] = entry_id
+        except KeyError as ke:
+            logger.error(f"[GitDB] Error getting next ID for git_test: {str(ke)}")
+            # Try to auto-fix the meta.json file
+            meta = _get_meta()
+            if 'next_ids' not in meta:
+                meta['next_ids'] = {}
+            meta['next_ids']['git_test'] = 1
+            _save_meta(meta)
+            logger.info("[GitDB] Added git_test to meta.json next_ids")
+            entry_id = _get_next_id('git_test')
+            entry_data['id'] = entry_id
+        except Exception as e:
+            logger.error(f"[GitDB] Unexpected error getting next ID: {str(e)}")
+            raise
         
         # Create directory for Git test entries if it doesn't exist
         test_dir = os.path.join(DATA_DIR, 'git_test')
-        os.makedirs(test_dir, exist_ok=True)
+        try:
+            os.makedirs(test_dir, exist_ok=True)
+            logger.info(f"[GitDB] Created or verified Git test directory: {test_dir}")
+        except Exception as dir_error:
+            logger.error(f"[GitDB] Failed to create Git test directory: {str(dir_error)}")
+            raise Exception(f"Failed to create Git test directory: {str(dir_error)}")
+        
+        # Ensure the directory exists before attempting to save the file
+        if not os.path.exists(test_dir):
+            logger.error(f"[GitDB] Git test directory does not exist after creation attempt: {test_dir}")
+            raise Exception(f"Git test directory does not exist: {test_dir}")
         
         # Save the entry to a JSON file
         file_path = os.path.join(test_dir, f"{entry_id}.json")
-        with open(file_path, 'w') as f:
-            json.dump(entry_data, f, indent=2)
+        logger.info(f"[GitDB] Attempting to save Git test entry to {file_path}")
         
-        logger.info(f"[GitDB] Git test entry saved to {file_path}")
+        try:
+            with open(file_path, 'w') as f:
+                json.dump(entry_data, f, indent=2)
+            logger.info(f"[GitDB] Git test entry saved to {file_path}")
+        except Exception as file_error:
+            logger.error(f"[GitDB] Failed to write Git test entry to file: {str(file_error)}")
+            raise Exception(f"Failed to write Git test entry to file: {str(file_error)}")
         
         # Commit the change to Git if Git persistence is enabled
         try:
@@ -782,7 +822,10 @@ def save_git_test_entry(entry_data):
     
     except Exception as e:
         logger.error(f"[GitDB] Error saving Git test entry: {str(e)}")
-        raise e
+        logger.error(f"[GitDB] Exception traceback: {traceback.format_exc()}")
+        # Return a tuple indicating failure but don't raise the exception
+        # This allows the API to still return a response
+        return None, False
 
 def get_all_git_test_entries():
     """

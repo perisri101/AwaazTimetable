@@ -246,222 +246,148 @@ def setup_git_credentials(repo_path):
         return False
 
 def commit_and_push(message):
-    """Commit all changes and push to remote"""
+    """
+    Commit and push changes to the Git repository
+    Returns True if the operation was successful, False otherwise
+    """
     try:
-        log_banner(f"GIT OPERATION: {message}")
-        logger.info(f"Starting Git operation in directory: {os.getcwd()}")
+        # Log the intent to commit
+        log_banner("GIT COMMIT STARTED")
+        logger.info(f"Attempting to commit with message: {message}")
+        print(f"Attempting to commit with message: {message}")
         
-        # Diagnostic information
-        log_banner("GIT ENVIRONMENT CHECK")
-        
-        # Log environment variables
-        git_repo_url = os.environ.get('GIT_REPO_URL', 'Not set')
-        git_username = os.environ.get('GIT_USERNAME', 'Not set')
-        git_token = os.environ.get('GIT_TOKEN', 'Not set')
-        
-        # Mask any sensitive info before logging
-        masked_repo_url = git_repo_url
-        if '@' in git_repo_url:
-            parts = git_repo_url.split('@')
-            masked_repo_url = 'https://***:***@' + parts[1]
-        
-        logger.info(f"GIT_REPO_URL: {masked_repo_url}")
-        logger.info(f"GIT_USERNAME: {git_username if git_username != 'Not set' else 'Not set'}")
-        logger.info(f"GIT_TOKEN: {'Set (masked)' if git_token != 'Not set' else 'Not set'}")
-        
-        # Log Git configuration
-        try:
-            git_user = subprocess.check_output(['git', 'config', 'user.name']).decode('utf-8').strip()
-            git_email = subprocess.check_output(['git', 'config', 'user.email']).decode('utf-8').strip()
-            logger.info(f"Git user: {git_user} <{git_email}>")
-        except subprocess.CalledProcessError as e:
-            logger.warning(f"Cannot get Git user config: {e}")
-        
-        # Log remote info
-        try:
-            remote_url = subprocess.check_output(['git', 'config', '--get', 'remote.origin.url']).decode('utf-8').strip()
-            # Mask credentials in URL
-            if '@' in remote_url:
-                parts = remote_url.split('@')
-                masked_url = 'https://***:***@' + parts[1]
-                logger.info(f"Remote URL: {masked_url}")
-            else:
-                logger.info(f"Remote URL: {remote_url}")
-        except subprocess.CalledProcessError as e:
-            logger.warning(f"Cannot get remote URL: {e}")
-        
-        # Check if we're in a Git repository
-        if not os.path.isdir('.git'):
-            logger.error("Not in a Git repository! .git directory not found")
-            return False
-        
-        # Add all changes
-        log_banner("GIT ADD")
-        logger.debug("Running: git add .")
-        result = subprocess.run(['git', 'add', '.'], capture_output=True, text=True)
-        if result.returncode != 0:
-            logger.error(f"Git add error: {result.stderr}")
-            print(f"Git add error: {result.stderr}")
-            return False
+        # Get the repository path
+        repo_path = os.path.dirname(os.path.dirname(__file__))
         
         # Check if there are changes to commit
         try:
-            logger.debug("Checking Git status")
-            status = subprocess.check_output(['git', 'status', '--porcelain']).decode('utf-8')
-            if not status.strip():
+            result = subprocess.run(
+                ['git', 'status', '--porcelain'],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            if not result.stdout.strip():
                 logger.info("No changes to commit")
-                return True
-            else:
-                changes = status.strip().split('\n')
-                logger.info(f"Changes to commit: {len(changes)} files")
-                for change in changes:
-                    logger.info(f"  {change}")
+                print("No changes to commit")
+                return True  # Consider this a success since there's nothing to commit
         except subprocess.CalledProcessError as e:
-            logger.warning(f"Unable to check Git status: {e.stderr}")
-            print(f"Unable to check Git status: {e.stderr}")
+            logger.warning(f"Git status check failed: {str(e)}")
+            if e.stderr:
+                logger.warning(f"Error details: {e.stderr}")
+            print(f"Git status check failed: {str(e)}")
+            # Continue anyway - we'll let the commit command decide if there's something to commit
+        
+        # Add all changes, including new files
+        try:
+            subprocess.run(
+                ['git', 'add', '-A'],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            logger.info("Added all changes to staging area")
+            print("Added all changes to staging area")
+        except subprocess.CalledProcessError as e:
+            logger.warning(f"Git add failed: {str(e)}")
+            if e.stderr:
+                logger.warning(f"Error details: {e.stderr}")
+            print(f"Git add failed: {str(e)}")
+            # Continue anyway - maybe some files were added successfully
+        
+        # Commit the changes
+        try:
+            # Commit with the provided message
+            timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+            commit_message = f"{message} - Automated commit at {timestamp}"
+            
+            result = subprocess.run(
+                ['git', 'commit', '-m', commit_message, '--allow-empty'],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            logger.info("Changes committed successfully")
+            logger.info(f"Commit details: {result.stdout}")
+            print("Changes committed successfully")
+            
+            # Check if we're connected to a remote repository
+            git_repo_url = os.environ.get('GIT_REPO_URL')
+            git_username = os.environ.get('GIT_USERNAME')
+            git_token = os.environ.get('GIT_TOKEN')
+            
+            if not git_repo_url:
+                logger.warning("No GIT_REPO_URL environment variable found. Skipping push.")
+                print("No GIT_REPO_URL environment variable found. Skipping push.")
+                return True  # We committed successfully, just didn't push
+                
+            # Push changes if we have credentials
+            if git_username and git_token:
+                log_banner("GIT PUSH STARTED")
+                logger.info("Pushing changes to remote repository")
+                print("Pushing changes to remote repository")
+                
+                # Maximum number of push attempts
+                max_attempts = 3
+                
+                # Try to push several times
+                for attempt in range(max_attempts):
+                    try:
+                        # Detect the current branch
+                        branch_result = subprocess.run(
+                            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+                            cwd=repo_path,
+                            capture_output=True,
+                            text=True,
+                            check=True
+                        )
+                        current_branch = branch_result.stdout.strip()
+                        
+                        # Push to the remote repository
+                        push_result = subprocess.run(
+                            ['git', 'push', 'origin', current_branch],
+                            cwd=repo_path,
+                            capture_output=True,
+                            text=True,
+                            check=True
+                        )
+                        
+                        log_banner("GIT PUSH SUCCESSFUL")
+                        logger.info("Changes pushed to remote repository")
+                        logger.info(f"Push details: {push_result.stdout}")
+                        print("Changes pushed to remote repository")
+                        return True
+                    except subprocess.CalledProcessError as e:
+                        logger.warning(f"Git push failed (attempt {attempt+1}/{max_attempts}): {str(e)}")
+                        if e.stderr:
+                            logger.warning(f"Error details: {e.stderr}")
+                        print(f"Git push failed (attempt {attempt+1}/{max_attempts}): {str(e)}")
+                        if attempt < max_attempts - 1:
+                            logger.info(f"Waiting 3 seconds before retry...")
+                            time.sleep(3)
+                
+                # If we reach here, all attempts failed
+                log_banner("GIT PUSH FAILED - LOCAL COMMIT ONLY")
+                logger.warning("All push attempts failed, but changes are committed locally")
+                print("All push attempts failed, but changes are committed locally")
+                return True  # Return True since we at least committed locally
+            else:
+                logger.warning("Git credentials not configured. Skipping push.")
+                print("Git credentials not configured. Skipping push.")
+                return True  # We committed successfully, just didn't push
+                
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Git commit failed: {str(e)}")
+            if e.stderr:
+                logger.error(f"Error details: {e.stderr}")
+            print(f"Git commit failed: {str(e)}")
             return False
         
-        # Commit changes
-        log_banner("GIT COMMIT")
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        commit_msg = f"{message} - Automated commit at {timestamp}"
-        logger.info(f"Committing with message: {commit_msg}")
-        result = subprocess.run(['git', 'commit', '-m', commit_msg], capture_output=True, text=True)
-        if result.returncode != 0:
-            logger.error(f"Git commit error: {result.stderr}")
-            print(f"Git commit error: {result.stderr}")
-            return False
-        else:
-            logger.info("Local commit successful")
-            
-            # Log the commit hash
-            try:
-                commit_hash = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('utf-8').strip()
-                logger.info(f"Commit hash: {commit_hash}")
-            except subprocess.CalledProcessError as e:
-                logger.warning(f"Unable to get commit hash: {e.stderr}")
-        
-        # Check if remote repo is configured
-        log_banner("GIT REMOTE CHECK")
-        try:
-            logger.debug("Checking Git remotes")
-            remotes = subprocess.check_output(['git', 'remote']).decode('utf-8').strip()
-            if 'origin' not in remotes.split('\n'):
-                logger.warning("No 'origin' remote found, skipping pull/push")
-                print("No 'origin' remote found, skipping pull/push")
-                return True  # Still return True since we committed locally
-            
-            # Get remote URL to verify it's configured
-            remote_url = subprocess.check_output(['git', 'config', '--get', 'remote.origin.url']).decode('utf-8').strip()
-            
-            # Mask credentials in URL for logging
-            if '@' in remote_url:
-                parts = remote_url.split('@')
-                masked_url = 'https://***:***@' + parts[1]
-                logger.info(f"Remote URL configured: {masked_url}")
-            else:
-                logger.info(f"Remote URL configured: {remote_url}")
-        except subprocess.CalledProcessError as e:
-            logger.warning(f"Unable to check Git remotes: {e.stderr}")
-            print(f"Unable to check Git remotes: {e.stderr}")
-            return True  # Still return True since we committed locally
-        
-        # Get current branch name
-        try:
-            branch_name = subprocess.check_output(['git', 'branch', '--show-current']).decode('utf-8').strip()
-            if not branch_name:
-                branch_name = 'main'  # Default branch name if not available
-            logger.info(f"Current branch: {branch_name}")
-        except subprocess.CalledProcessError as e:
-            branch_name = 'main'  # Default branch name if command fails
-            logger.info(f"Could not determine branch name, using default: {branch_name}")
-        
-        # Pull latest changes
-        log_banner("GIT PULL")
-        try:
-            logger.info(f"Pulling latest changes from remote branch 'origin/{branch_name}'")
-            result = subprocess.run(['git', 'pull', '--rebase', 'origin', branch_name], capture_output=True, text=True)
-            if result.returncode != 0:
-                logger.warning(f"Git pull error: {result.stderr}")
-                print(f"Git pull error: {result.stderr}")
-                # Try to resolve simple conflicts
-                logger.info("Attempting to resolve conflicts")
-                subprocess.run(['git', 'checkout', '--theirs', '.'], capture_output=True)
-                subprocess.run(['git', 'add', '.'], capture_output=True)
-                subprocess.run(['git', 'rebase', '--continue'], capture_output=True)
-            else:
-                logger.info("Pull successful or already up to date")
-        except subprocess.CalledProcessError as e:
-            logger.warning(f"Git pull failed: {e.stderr}")
-            print(f"Git pull failed: {e.stderr}")
-        
-        # Push changes to remote
-        log_banner("GIT PUSH")
-        max_attempts = 3
-        logger.info(f"Pushing changes to remote, max attempts: {max_attempts}")
-        for attempt in range(max_attempts):
-            try:
-                logger.info(f"Push attempt {attempt+1}/{max_attempts} to branch 'origin/{branch_name}'")
-                
-                # Add -u flag to set up tracking for the first push
-                if attempt == 0:
-                    cmd = ['git', 'push', '-u', 'origin', branch_name]
-                    logger.info(f"Running: {' '.join(cmd)}")
-                    result = subprocess.run(cmd, capture_output=True, text=True)
-                else:
-                    cmd = ['git', 'push', 'origin', branch_name]
-                    logger.info(f"Running: {' '.join(cmd)}")
-                    result = subprocess.run(cmd, capture_output=True, text=True)
-                
-                # Log full command output regardless of success
-                if result.stdout:
-                    logger.info(f"Push stdout: {result.stdout}")
-                if result.stderr:
-                    logger.info(f"Push stderr: {result.stderr}")
-                
-                if result.returncode == 0:
-                    log_banner("GIT PUSH SUCCESSFUL")
-                    logger.info(f"Push successful to 'origin/{branch_name}'!")
-                    print(f"Git push successful to branch '{branch_name}'!")
-                    return True
-                
-                # Check for specific push errors
-                error_msg = result.stderr
-                logger.warning(f"Git push error (attempt {attempt+1}/{max_attempts}): {error_msg}")
-                print(f"Git push error (attempt {attempt+1}/{max_attempts}): {error_msg}")
-                
-                # Handle different error cases
-                if "rejected" in error_msg and "would be overwritten by merge" in error_msg:
-                    # Handle non-fast-forward error (remote has changes that local doesn't)
-                    logger.info("Attempting to pull and merge changes before pushing again")
-                    subprocess.run(['git', 'pull', '--no-rebase', 'origin', branch_name], capture_output=True, text=True)
-                elif "Repository not found" in error_msg:
-                    logger.error("Repository not found error - check if the repository exists on GitHub")
-                    logger.error("You need to create the repository at: " + remote_url)
-                    break  # Stop trying, repository issue
-                elif "Permission denied" in error_msg or "Authentication failed" in error_msg:
-                    logger.error("Authentication error - check your Git credentials")
-                    logger.error("Make sure GIT_USERNAME and GIT_TOKEN are set correctly")
-                    # Add more detailed authentication diagnostics
-                    if git_username == 'Not set' or git_token == 'Not set':
-                        logger.error("GIT_USERNAME or GIT_TOKEN environment variables are not set")
-                    break  # Stop trying, credentials issue
-                
-                if attempt < max_attempts - 1:
-                    logger.info(f"Waiting 3 seconds before retry...")
-                    time.sleep(3)
-            except subprocess.CalledProcessError as e:
-                logger.warning(f"Git push failed (attempt {attempt+1}/{max_attempts}): {str(e)}")
-                if e.stderr:
-                    logger.warning(f"Error details: {e.stderr}")
-                print(f"Git push failed (attempt {attempt+1}/{max_attempts}): {str(e)}")
-                if attempt < max_attempts - 1:
-                    time.sleep(3)
-        
-        log_banner("GIT PUSH FAILED - LOCAL COMMIT ONLY")
-        logger.warning("All push attempts failed, but changes are committed locally")
-        print("All push attempts failed, but changes are committed locally")
-        return True  # Return True since we at least committed locally
     except Exception as e:
         log_banner("GIT OPERATION ERROR")
         logger.error(f"Error in Git operations: {str(e)}")

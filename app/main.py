@@ -892,24 +892,39 @@ def save_git_test():
     try:
         data = request.json
         
+        app.logger.debug(f"Received request to save Git test entry: {data.get('title', 'Untitled')}")
+        
         # Validate data
         if not data:
+            app.logger.warning("No data provided for Git test entry")
             return jsonify({'success': False, 'message': 'No data provided'}), 400
         
         if not data.get('title'):
+            app.logger.warning("Title is required for Git test entry")
             return jsonify({'success': False, 'message': 'Title is required'}), 400
         
         if not data.get('content'):
+            app.logger.warning("Content is required for Git test entry")
             return jsonify({'success': False, 'message': 'Content is required'}), 400
         
         # Save entry
+        app.logger.info(f"Calling gitdb.save_git_test_entry with title: {data.get('title')}")
         entry, git_committed = gitdb.save_git_test_entry(data)
+        
+        # Check if entry was saved successfully
+        if entry is None:
+            app.logger.error("Failed to save Git test entry. Entry is None.")
+            return jsonify({
+                'success': False, 
+                'message': 'Error saving Git test entry. Check the logs for more details.'
+            }), 500
         
         # Try to get the commit hash
         commit_hash = None
         try:
             if git_committed:
                 import subprocess
+                app.logger.info("Getting commit hash for successful Git commit")
                 result = subprocess.run(
                     ['git', 'rev-parse', '--short', 'HEAD'],
                     cwd=os.path.dirname(os.path.dirname(__file__)),
@@ -918,9 +933,11 @@ def save_git_test():
                     check=True
                 )
                 commit_hash = result.stdout.strip()
+                app.logger.info(f"Got commit hash: {commit_hash}")
         except Exception as e:
             app.logger.error(f"Error getting commit hash: {str(e)}")
         
+        app.logger.info(f"Git test entry saved successfully. ID: {entry.get('id')}, Committed: {git_committed}")
         return jsonify({
             'success': True, 
             'entry': entry,
@@ -928,7 +945,9 @@ def save_git_test():
             'commit_hash': commit_hash
         })
     except Exception as e:
-        app.logger.error(f"Error saving Git test entry: {str(e)}")
+        import traceback
+        app.logger.error(f"Unhandled exception in save_git_test: {str(e)}")
+        app.logger.error(f"Exception traceback: {traceback.format_exc()}")
         return jsonify({'success': False, 'message': f"Error: {str(e)}"}), 500
 
 @app.route('/api/git-test/entries')
