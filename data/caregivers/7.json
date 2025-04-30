@@ -1,0 +1,11 @@
+{
+  "id": 7,
+  "name": "CG12",
+  "email": "CG12@CG12.com",
+  "phone": "",
+  "max_hours_per_week": 40,
+  "max_hours_per_day": 8,
+  "max_days_per_week": 5,
+  "rate": 0,
+  "created_at": "2025-04-30T04:37:11.607261"
+}
