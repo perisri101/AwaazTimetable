@@ -1,0 +1,24 @@
+[
+  {
+    "description": "Laundry",
+    "day_of_week": 0,
+    "start_hour": 0,
+    "end_hour": 2,
+    "activity_id": 3,
+    "id": 191,
+    "calendar_id": 5,
+    "template_id": null,
+    "completed": false
+  },
+  {
+    "description": "Laundry",
+    "day_of_week": 4,
+    "start_hour": 0,
+    "end_hour": 2,
+    "activity_id": 3,
+    "id": 192,
+    "calendar_id": 5,
+    "template_id": null,
+    "completed": false
+  }
+]
