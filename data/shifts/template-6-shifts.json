@@ -1,0 +1,14 @@
+[
+  {
+    "caregiver_id": 17,
+    "day_of_week": 0,
+    "start_hour": 0,
+    "end_hour": 2
+  },
+  {
+    "caregiver_id": 17,
+    "day_of_week": 2,
+    "start_hour": 2,
+    "end_hour": 4
+  }
+]
