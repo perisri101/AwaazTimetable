@@ -1,0 +1,18 @@
+[
+  {
+    "caregiver_id": 17,
+    "day_of_week": 0,
+    "start_hour": 0,
+    "end_hour": 2,
+    "calendar_id": 5,
+    "template_id": null
+  },
+  {
+    "caregiver_id": 17,
+    "day_of_week": 2,
+    "start_hour": 2,
+    "end_hour": 4,
+    "calendar_id": 5,
+    "template_id": null
+  }
+]
