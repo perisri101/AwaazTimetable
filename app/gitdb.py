@@ -1,8 +1,17 @@
 import os
 import json
 import shutil
+import logging
 from datetime import datetime
 from .git_utils import commit_and_push
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] [GitDB] %(levelname)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger('GitDB')
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 
@@ -57,22 +66,30 @@ def _save_entity(entity_type, entity_data):
     entity_dir = os.path.join(DATA_DIR, f"{entity_type}s")
     file_path = os.path.join(entity_dir, f"{entity_data['id']}.json")
     
+    logger.info(f"Saving {entity_type} with ID {entity_data['id']} to {file_path}")
     with open(file_path, 'w') as f:
         json.dump(entity_data, f, indent=2)
     
     # Commit changes if not in bulk operation
     if not os.environ.get('GITDB_BULK_OPERATION'):
+        logger.info(f"Triggering Git commit for {entity_type} ID: {entity_data['id']}")
         try:
             # Check if current app has Git persistence enabled
             from flask import current_app
             git_enabled = current_app.config.get('GIT_PERSISTENCE_ENABLED', False)
             
             if git_enabled:
-                commit_and_push(f"Updated {entity_type} {entity_data['id']}")
+                logger.info(f"Git persistence is enabled, committing changes")
+                from .git_utils import commit_and_push
+                commit_result = commit_and_push(f"Updated {entity_type} {entity_data['id']}")
+                logger.info(f"Git commit result: {'Success' if commit_result else 'Failed'}")
+            else:
+                logger.warning("Git persistence is disabled, changes saved locally only")
             # If git is not enabled, we just saved the file locally which is fine
         except Exception as e:
             # If there's any error accessing the app context, just proceed silently
             # The file is already saved locally at this point
+            logger.error(f"Error during Git commit: {str(e)}")
             print(f"Note: Git persistence skipped: {str(e)}")
             pass
 
@@ -620,15 +637,24 @@ def delete_activity(id):
 # Function to safely commit changes through Git if enabled
 def _safe_commit(message):
     """Commit changes using Git if enabled"""
+    logger.info(f"Safe commit requested: {message}")
     try:
         from flask import current_app
         git_enabled = current_app.config.get('GIT_PERSISTENCE_ENABLED', False)
+        
         if git_enabled:
+            logger.info("Git persistence is enabled, proceeding with commit")
             from .git_utils import commit_and_push
-            commit_and_push(message)
+            commit_result = commit_and_push(message)
+            logger.info(f"Git commit result: {'Success' if commit_result else 'Failed'}")
+            return commit_result
+        else:
+            logger.warning("Git persistence is disabled, skipping commit")
+            return True  # Return success since we're not actually expecting to commit
     except Exception as e:
+        logger.error(f"Error in safe commit: {str(e)}")
         print(f"Git commit skipped: {str(e)}")
-        pass
+        return False
 
 # Initialize meta.json if it doesn't exist
 _get_meta() 

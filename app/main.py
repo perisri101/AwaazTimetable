@@ -31,6 +31,8 @@ csrf = CSRFProtect(app)
 @app.before_first_request
 def setup_git():
     try:
+        print("\n==== SETTING UP GIT-BASED DATABASE PERSISTENCE ====")
+        
         # First ensure we have a local repository set up
         try:
             import importlib.util
@@ -38,8 +40,15 @@ def setup_git():
                                                          os.path.join(os.path.dirname(__file__), "setup_render_repo.py"))
             setup_module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(setup_module)
+            
+            # Set up the repository
             setup_module.setup_local_repo()
             print("Local Git repository setup completed")
+            
+            # Run diagnostics for extra information
+            print("\n==== GIT REPOSITORY DIAGNOSTIC REPORT ====")
+            setup_module.run_git_diagnostic()
+            print("==== END DIAGNOSTIC REPORT ====\n")
         except Exception as e:
             print(f"Warning: Could not set up local Git repository: {str(e)}")
         
@@ -48,14 +57,26 @@ def setup_git():
         repo_path = os.path.dirname(os.path.dirname(__file__))
         git_available = setup_git_credentials(repo_path)
         app.config['GIT_PERSISTENCE_ENABLED'] = git_available
+        
         if not git_available:
-            print("WARNING: Git persistence is disabled, data will only be stored locally")
+            print("\n==== WARNING: GIT PERSISTENCE DISABLED ====")
+            print("Git persistence is disabled. Data will only be stored locally.")
+            print("Local data will NOT be automatically committed and pushed to Git.")
+            print("This means data may be lost if the application container is restarted.")
+            print("Check the logs above for more information on what went wrong.")
+            print("===============================================\n")
         else:
-            print("Git persistence is enabled")
+            print("\n==== GIT PERSISTENCE ENABLED ====")
+            print("Git persistence is enabled and working.")
+            print("Changes to data will be automatically committed to the Git repository.")
+            print("You can see the Git operations in the logs with [GitDB] prefix.")
+            print("====================================\n")
     except Exception as e:
         app.config['GIT_PERSISTENCE_ENABLED'] = False
-        print(f"Error setting up Git: {str(e)}")
+        print(f"\n==== ERROR SETTING UP GIT: {str(e)} ====")
         print("WARNING: Git persistence is disabled, data will only be stored locally")
+        print("This means your data may be lost if the application container is restarted.")
+        print("==========================================\n")
 
 # Initialize database
 def create_tables():
