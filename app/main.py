@@ -766,9 +766,20 @@ def delete_activity_category(id):
 # Activity Management
 @app.route('/manage/activities')
 def manage_activities():
-    activities = gitdb.get_all_activities()
-    categories = gitdb.get_all_activity_categories()
-    return render_template('manage_activities.html', activities=activities, categories=categories)
+    try:
+        activities = gitdb.get_all_activities() or []
+        categories = gitdb.get_all_activity_categories() or []
+        
+        # Log counts for debugging
+        app.logger.info(f"Found {len(activities)} activities and {len(categories)} categories")
+        
+        return render_template('manage_activities.html', activities=activities, categories=categories)
+    except Exception as e:
+        app.logger.error(f"Error in manage_activities route: {str(e)}")
+        # Return a simple error page if something goes wrong
+        return render_template('error.html', 
+                              error_title="Error Loading Activities", 
+                              error_message="There was a problem loading activities and categories."), 500
 
 @app.route('/api/activities', methods=['GET'])
 def get_activities():

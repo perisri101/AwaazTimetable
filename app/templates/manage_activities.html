@@ -52,7 +52,14 @@
                         {% for activity in activities %}
                         <tr data-category-id="{{ activity.category_id }}">
                             <td>{{ activity.name }}</td>
-                            <td>{{ categories|selectattr('id', 'eq', activity.category_id)|first|attr('name') }}</td>
+                            <td>
+                                {% set category_matches = categories|selectattr('id', 'eq', activity.category_id)|list %}
+                                {% if category_matches %}
+                                    {{ category_matches[0].name }}
+                                {% else %}
+                                    <span class="text-muted">Unknown Category</span>
+                                {% endif %}
+                            </td>
                             <td>{{ activity.description }}</td>
                             <td>
                                 <button type="button" class="btn btn-sm btn-primary edit-activity-btn" 

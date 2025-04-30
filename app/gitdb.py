@@ -75,12 +75,16 @@ def _save_entity(entity_type, entity_data):
         id = entity_data['id']
         
         # Ensure the directory exists
-        # Handle special case for activity_category => activity_categories
+        # Handle special cases for proper pluralization:
+        # 1. activity_category => activity_categories (not activity_categorys)
+        # 2. activity => activities (not activitys)
         # This is necessary because the normal pluralization (entity_type + 's')
-        # would result in 'activity_categorys' which is grammatically incorrect.
-        # Other functions like get_activity_category already use 'activity_categories'.
+        # would result in grammatically incorrect directory names.
+        # Other retrieval functions already use the correct plural forms.
         if entity_type == 'activity_category':
             entity_dir = os.path.join(DATA_DIR, 'activity_categories')
+        elif entity_type == 'activity':
+            entity_dir = os.path.join(DATA_DIR, 'activities')
         else:
             entity_dir = os.path.join(DATA_DIR, f"{entity_type}s")
             

@@ -158,30 +158,41 @@ python git_health_check.py --fix
    - Verify your GitHub username and token
    - Ensure the token hasn't expired
 
-## Activity Categories Directory Fix
+## Activity Categories and Activities Directory Fix
 
-The application had an inconsistency in how activity categories were stored. The issue was:
+The application had inconsistencies in how activity categories and activities were stored. The issues were:
 
-- The `_save_entity` function stored activity categories in a directory called `activity_categorys` (incorrect plural)
-- The retrieval functions looked for files in a directory called `activity_categories` (correct plural)
+- The `_save_entity` function stored activity categories in a directory called `activity_categorys` (incorrect plural), while the retrieval functions looked for files in a directory called `activity_categories` (correct plural)
+- Similarly, the `_save_entity` function stored activities in a directory called `activitys` (incorrect plural), while the retrieval functions looked for files in a directory called `activities` (correct plural)
 
-This has been fixed by:
+These have been fixed by:
 
-1. Modifying the `_save_entity` function to use the correct plural form for activity categories
-2. Creating a `fix_activity_categories.py` script that moves any existing files from the incorrect to the correct directory
+1. Modifying the `_save_entity` function to use the correct plural forms for both entity types
+2. Creating fix scripts that move any existing files from the incorrect to the correct directories
 
-If you encounter missing activity categories, you can run the fix script:
+If you encounter missing activity categories or activities, you can run the combined fix script:
 
 ```bash
-python fix_activity_categories.py
+# Fix both issues at once
+python fix_plurals.py
 ```
 
-This script will:
-- Move any JSON files from `data/activity_categorys/` to `data/activity_categories/`
-- Remove the incorrect directory
+Or you can run the individual fix scripts:
+
+```bash
+# Fix activity categories only
+python fix_activity_categories.py
+
+# Fix activities only
+python fix_activities.py
+```
+
+These scripts will:
+- Move any JSON files from the incorrectly named directories to the correctly named directories
+- Remove the incorrect directories
 - Log the operations performed
 
-The issue has been fixed in the code, so this should only be needed for existing deployments.
+The issues have been fixed in the code, so these scripts should only be needed for existing deployments.
 
 ## Project Structure
 
