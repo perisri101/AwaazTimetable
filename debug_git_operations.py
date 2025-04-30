@@ -1,247 +1,412 @@
 #!/usr/bin/env python3
 """
-Debug script for testing Git operations on Render.com.
-This script performs various Git operations with detailed logging to
-diagnose issues with Git pushing to remote repositories.
+Real-time Git operations monitoring script for AwaazTimetable
 
-Usage:
-    python debug_git_operations.py [--create-test-file] [--full-diagnostic]
+This script monitors Git operations in real-time, showing detailed information
+about each operation, including:
+- Commands executed
+- Results/output
+- Error messages
+- Environment variables
+- Git configuration
+- Repository status
+
+It's a valuable tool for debugging Git-related issues in the AwaazTimetable
+application, especially when running on remote servers like Render.com.
+
+Usage: python debug_git_operations.py [--verbose] [--test-push]
 
 Options:
-    --create-test-file  Create a test file and commit/push it
-    --full-diagnostic   Run a full diagnostic of the Git setup
-
-Example:
-    python debug_git_operations.py --create-test-file --full-diagnostic
+    --verbose    Show detailed output for all Git operations
+    --test-push  Perform a test push operation
 """
 
 import os
-import subprocess
 import sys
+import subprocess
 import argparse
 import time
+import json
+import threading
+import tempfile
+from pathlib import Path
 from datetime import datetime
 
-# Try import from app directory
-try:
-    from app.git_utils import commit_and_push, run_git_diagnostic
-except ImportError:
-    # If running from app directory
-    try:
-        from git_utils import commit_and_push, run_git_diagnostic
-    except ImportError:
-        print("Error: Could not import git_utils. Make sure you're running this from the project root or app directory.")
-        sys.exit(1)
+# Constants
+DATA_DIR = "data"
+REQUIRED_ENV_VARS = ["GIT_REPO_URL", "GIT_USERNAME", "GIT_TOKEN"]
+
+# Color formatting for console output
+class Colors:
+    HEADER = '\033[95m'
+    BLUE = '\033[94m'
+    CYAN = '\033[96m'
+    GREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 
 def print_banner(message):
     """Print a formatted banner message"""
-    banner = "\n" + "=" * 80 + "\n" + " " + message.center(78) + " \n" + "=" * 80
-    print(banner)
+    width = 80
+    print(f"\n{Colors.HEADER}{'-' * width}")
+    print(f" {message} ".center(width))
+    print(f"{'-' * width}{Colors.ENDC}\n")
 
 def run_command(cmd, exit_on_error=False):
-    """Run a command with detailed output"""
-    print(f"Running: {cmd}")
+    """Run a command and return its output"""
+    print(f"{Colors.CYAN}Running: {cmd}{Colors.ENDC}")
     try:
+        start_time = time.time()
         result = subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
-        if result.stdout:
-            print(f"Output:\n{result.stdout}")
+        end_time = time.time()
+        
+        duration = end_time - start_time
+        
+        if result.stdout.strip():
+            print(f"{Colors.GREEN}--- Output ---{Colors.ENDC}")
+            print(result.stdout.strip())
+        
+        print(f"{Colors.GREEN}Command completed successfully in {duration:.2f}s{Colors.ENDC}")
         return result.stdout.strip(), True
     except subprocess.CalledProcessError as e:
-        print(f"Error running '{cmd}':")
+        print(f"{Colors.FAIL}--- Error ---{Colors.ENDC}")
         print(f"Exit code: {e.returncode}")
+        
         if e.stderr:
-            print(f"Error output:\n{e.stderr}")
+            print(f"{Colors.FAIL}Error output:{Colors.ENDC}")
+            print(e.stderr)
+        
         if exit_on_error:
+            print(f"{Colors.FAIL}Exiting due to error.{Colors.ENDC}")
             sys.exit(1)
         return e.stderr.strip() if e.stderr else "", False
 
 def check_env_variables():
     """Check if required environment variables are set"""
-    print_banner("CHECKING ENVIRONMENT VARIABLES")
+    print_banner("Checking Environment Variables")
     
-    required_vars = ['GIT_REPO_URL', 'GIT_USERNAME', 'GIT_TOKEN']
-    all_present = True
+    missing_vars = []
     
-    for var in required_vars:
-        value = os.environ.get(var, 'Not set')
-        
-        # Mask token for security
-        if var == 'GIT_TOKEN' and value != 'Not set':
-            display_value = value[:4] + '...' + value[-4:] if len(value) > 8 else '****'
-            print(f"{var}: {display_value}")
-        elif var == 'GIT_REPO_URL' and value != 'Not set':
-            # Mask any credentials in URL
-            if '@' in value:
-                parts = value.split('@')
-                display_value = 'https://***:***@' + parts[1]
-                print(f"{var}: {display_value}")
-            else:
-                print(f"{var}: {value}")
+    for var in REQUIRED_ENV_VARS:
+        value = os.environ.get(var)
+        if not value:
+            print(f"{Colors.FAIL}❌ {var}: Not set{Colors.ENDC}")
+            missing_vars.append(var)
         else:
-            print(f"{var}: {value}")
-        
-        if value == 'Not set':
-            all_present = False
+            # Mask token for security
+            if var == 'GIT_TOKEN':
+                masked_value = value[:4] + '*' * (len(value) - 8) + value[-4:] if len(value) > 8 else '****'
+                print(f"{Colors.GREEN}✓ {var}: {masked_value}{Colors.ENDC}")
+            else:
+                print(f"{Colors.GREEN}✓ {var}: {value}{Colors.ENDC}")
     
-    return all_present
+    if missing_vars:
+        print(f"\n{Colors.WARNING}Missing environment variables: {', '.join(missing_vars)}{Colors.ENDC}")
+        
+        # Offer to set temporary variables for this session
+        set_vars = input("\nWould you like to set these variables temporarily for this session? (y/n): ")
+        if set_vars.lower() == 'y':
+            for var in missing_vars:
+                if var == 'GIT_TOKEN':
+                    # Don't echo the token when typing
+                    import getpass
+                    value = getpass.getpass(f"Enter {var} (input hidden): ")
+                else:
+                    value = input(f"Enter {var}: ")
+                os.environ[var] = value
+            
+            # Recheck after setting
+            check_env_variables()
+    
+    # Validate URL format
+    repo_url = os.environ.get('GIT_REPO_URL', '')
+    if repo_url and not repo_url.startswith('https://github.com/'):
+        print(f"{Colors.WARNING}Warning: GIT_REPO_URL doesn't follow the standard format.{Colors.ENDC}")
+        print(f"Expected format: https://github.com/username/repo.git")
+        print(f"Current value: {repo_url}")
 
 def check_git_config():
     """Check Git configuration"""
-    print_banner("CHECKING GIT CONFIGURATION")
+    print_banner("Checking Git Configuration")
     
-    run_command("git config --list")
+    # Check if Git is installed
+    git_version, success = run_command("git --version")
+    if not success:
+        print(f"{Colors.FAIL}❌ Git is not installed or not in PATH{Colors.ENDC}")
+        return False
     
-    user_name, success1 = run_command("git config user.name")
-    user_email, success2 = run_command("git config user.email")
+    print(f"{Colors.GREEN}✓ Git version: {git_version}{Colors.ENDC}")
     
-    if not success1 or not user_name:
-        print("Git user name is not configured!")
-        # Set default user name from environment or default
-        user_name = os.environ.get('GIT_USERNAME', 'Awaaz Timetable App')
-        run_command(f'git config user.name "{user_name}"')
-        print(f"Git user name set to: {user_name}")
+    # Check Git configuration
+    git_config, success = run_command("git config --list")
+    if not success:
+        print(f"{Colors.FAIL}❌ Failed to get Git configuration{Colors.ENDC}")
+        return False
     
-    if not success2 or not user_email:
-        print("Git user email is not configured!")
-        # Set default user email
-        user_email = os.environ.get('GIT_EMAIL', 'app@awaaz-timetable.com')
-        run_command(f'git config user.email "{user_email}"')
-        print(f"Git user email set to: {user_email}")
+    # Extract user config
+    user_name = None
+    user_email = None
+    for line in git_config.split('\n'):
+        if line.startswith('user.name='):
+            user_name = line.split('=', 1)[1]
+        elif line.startswith('user.email='):
+            user_email = line.split('=', 1)[1]
+    
+    if user_name:
+        print(f"{Colors.GREEN}✓ Git user.name: {user_name}{Colors.ENDC}")
+    else:
+        print(f"{Colors.WARNING}⚠ Git user.name not configured{Colors.ENDC}")
+    
+    if user_email:
+        print(f"{Colors.GREEN}✓ Git user.email: {user_email}{Colors.ENDC}")
+    else:
+        print(f"{Colors.WARNING}⚠ Git user.email not configured{Colors.ENDC}")
     
     return True
 
 def test_git_connection():
-    """Test Git connection to remote"""
-    print_banner("TESTING GIT CONNECTION")
+    """Test connection to the Git remote repository"""
+    print_banner("Testing Git Remote Connection")
     
-    remote_url, success = run_command("git config --get remote.origin.url")
-    if not success or not remote_url:
-        print("No Git remote URL configured!")
+    # Check if we're in a Git repository
+    is_git_repo, success = run_command("git rev-parse --is-inside-work-tree")
+    if not success or is_git_repo != "true":
+        print(f"{Colors.WARNING}Not currently in a Git repository. Creating a temporary one for testing.{Colors.ENDC}")
         
-        # Get repo URL from environment
-        repo_url = os.environ.get('GIT_REPO_URL')
-        if not repo_url:
-            print("ERROR: GIT_REPO_URL environment variable not set!")
+        # Create a temporary directory for testing
+        test_dir = tempfile.mkdtemp(prefix="git-test-")
+        os.chdir(test_dir)
+        print(f"Changed to temporary directory: {test_dir}")
+        
+        # Initialize Git repository
+        init_result, success = run_command("git init")
+        if not success:
+            print(f"{Colors.FAIL}Failed to initialize Git repository.{Colors.ENDC}")
             return False
         
-        # Add 'origin' remote
-        print(f"Adding remote 'origin' with URL: {repo_url}")
-        run_command(f'git remote add origin "{repo_url}"')
-    else:
-        print(f"Remote URL: {remote_url}")
+        # Set up Git user for this repository
+        username = os.environ.get('GIT_USERNAME', 'AwaazTimetable App')
+        email = os.environ.get('GIT_EMAIL', 'app@awaaz-timetable.com')
+        
+        run_command(f'git config user.name "{username}"')
+        run_command(f'git config user.email "{email}"')
     
-    # Update remote URL with authentication if needed
-    if 'GIT_USERNAME' in os.environ and 'GIT_TOKEN' in os.environ:
-        username = os.environ.get('GIT_USERNAME')
-        token = os.environ.get('GIT_TOKEN')
-        
-        remote_url, _ = run_command("git config --get remote.origin.url")
-        
-        # Only update if it's a HTTPS URL without credentials
-        if remote_url.startswith('https://') and '@' not in remote_url:
-            print("Updating remote URL with authentication...")
-            auth_url = remote_url.replace('https://', f'https://{username}:{token}@')
-            run_command(f'git remote set-url origin "{auth_url}"')
-            print("Remote URL updated with authentication credentials")
+    # Get remote URL from environment variable
+    repo_url = os.environ.get('GIT_REPO_URL', '')
+    if not repo_url:
+        print(f"{Colors.FAIL}GIT_REPO_URL environment variable not set.{Colors.ENDC}")
+        return False
+    
+    # Get credentials
+    username = os.environ.get('GIT_USERNAME', '')
+    token = os.environ.get('GIT_TOKEN', '')
+    
+    if not username or not token:
+        print(f"{Colors.FAIL}GIT_USERNAME and/or GIT_TOKEN environment variables not set.{Colors.ENDC}")
+        return False
+    
+    # Construct authenticated URL
+    auth_url = repo_url
+    if repo_url.startswith('https://'):
+        auth_url = repo_url.replace('https://', f'https://{username}:{token}@')
+    
+    # Set up remote
+    remotes, _ = run_command("git remote")
+    if 'origin' not in remotes.split():
+        print(f"{Colors.CYAN}Adding remote 'origin'...{Colors.ENDC}")
+        run_command(f'git remote add origin "{auth_url}"')
+    else:
+        print(f"{Colors.CYAN}Updating remote 'origin' URL...{Colors.ENDC}")
+        run_command(f'git remote set-url origin "{auth_url}"')
     
     # Test connection
-    output, success = run_command("git ls-remote origin HEAD")
+    print(f"{Colors.CYAN}Fetching from remote repository...{Colors.ENDC}")
+    fetch_result, success = run_command("git fetch origin")
     
     if success:
-        print("✅ Successfully connected to remote repository!")
+        print(f"{Colors.GREEN}✓ Successfully connected to remote repository.{Colors.ENDC}")
         return True
     else:
-        print("❌ Failed to connect to remote repository!")
-        
-        if "Repository not found" in output:
-            print("ERROR: Repository not found. Make sure it exists and you have access to it.")
-        elif "Authentication failed" in output:
-            print("ERROR: Authentication failed. Check your username and token.")
-        
+        print(f"{Colors.FAIL}❌ Failed to connect to remote repository.{Colors.ENDC}")
         return False
 
 def create_test_file_and_commit():
     """Create a test file and commit it"""
-    print_banner("CREATING TEST FILE AND COMMITTING")
+    print_banner("Creating Test Commit")
     
     # Create a test file
-    test_file = 'git_debug_test.txt'
+    test_file = "git_debug_test.txt"
     with open(test_file, 'w') as f:
         f.write(f"Git debug test file\n")
         f.write(f"Created at: {datetime.now().isoformat()}\n")
-        f.write(f"Environment: Render.com\n")
+        f.write(f"Running from: {os.getcwd()}\n")
     
-    print(f"Created test file: {test_file}")
+    print(f"{Colors.GREEN}Created test file: {test_file}{Colors.ENDC}")
     
-    # Check if our app's commit_and_push function works
-    print("\nUsing app's commit_and_push function:")
-    success = commit_and_push("Debug test commit")
+    # Add file to Git
+    add_result, success = run_command(f"git add {test_file}")
+    if not success:
+        print(f"{Colors.FAIL}Failed to add file to Git.{Colors.ENDC}")
+        return False
+    
+    # Commit the file
+    commit_result, success = run_command('git commit -m "Test commit from debug script"')
+    if not success:
+        print(f"{Colors.FAIL}Failed to commit file.{Colors.ENDC}")
+        return False
+    
+    print(f"{Colors.GREEN}Successfully created test commit.{Colors.ENDC}")
+    
+    # Try to push
+    print(f"{Colors.CYAN}Attempting to push commit...{Colors.ENDC}")
+    
+    # Get current branch
+    branch, _ = run_command("git branch --show-current")
+    if not branch:
+        branch = "main"
+    
+    push_result, success = run_command(f"git push origin {branch}")
     
     if success:
-        print("✅ App's commit_and_push function reported success")
+        print(f"{Colors.GREEN}✓ Successfully pushed test commit.{Colors.ENDC}")
     else:
-        print("❌ App's commit_and_push function reported failure")
+        print(f"{Colors.WARNING}⚠ Failed to push test commit.{Colors.ENDC}")
+        
+        # Try force push if there's a non-fast-forward error
+        if "non-fast-forward" in push_result or "rejected" in push_result:
+            force_push = input("Would you like to try force push? (y/n): ")
+            if force_push.lower() == 'y':
+                force_result, force_success = run_command(f"git push -f origin {branch}")
+                if force_success:
+                    print(f"{Colors.GREEN}✓ Successfully force pushed test commit.{Colors.ENDC}")
+                else:
+                    print(f"{Colors.FAIL}❌ Failed to force push test commit.{Colors.ENDC}")
     
-    # Try manual commit and push
-    print("\nTrying manual commit and push:")
-    run_command("git add git_debug_test.txt")
-    run_command("git commit -m \"Debug test commit - created via debug script\"")
-    output, success = run_command("git push origin HEAD")
-    
-    if success:
-        print("✅ Successfully pushed to remote repository!")
-    else:
-        print("❌ Failed to push to remote repository")
-        print(f"Error: {output}")
-    
-    # Cleanup
+    # Clean up
+    run_command(f"git reset --soft HEAD~1")
+    run_command(f"git restore --staged {test_file}")
     os.remove(test_file)
+    print(f"{Colors.CYAN}Cleaned up test file and commit.{Colors.ENDC}")
+    
     return success
 
-def main():
-    parser = argparse.ArgumentParser(description='Debug Git operations on Render.com')
-    parser.add_argument('--create-test-file', action='store_true', help='Create a test file and commit/push it')
-    parser.add_argument('--full-diagnostic', action='store_true', help='Run a full diagnostic of the Git setup')
+def monitor_git_directory(interval=2, verbose=False):
+    """Monitor .git directory for changes in real-time"""
+    print_banner("Starting Git Directory Monitor")
     
+    if not os.path.isdir(".git"):
+        print(f"{Colors.WARNING}No .git directory found in current location.{Colors.ENDC}")
+        return
+    
+    # Get initial state
+    head_file = os.path.join(".git", "HEAD")
+    index_file = os.path.join(".git", "index")
+    refs_dir = os.path.join(".git", "refs")
+    
+    head_mtime = os.path.getmtime(head_file) if os.path.exists(head_file) else 0
+    index_mtime = os.path.getmtime(index_file) if os.path.exists(index_file) else 0
+    
+    print(f"{Colors.CYAN}Monitoring Git directory for changes (Press Ctrl+C to stop)...{Colors.ENDC}")
+    
+    try:
+        while True:
+            # Check HEAD file (current branch/commit)
+            if os.path.exists(head_file):
+                new_head_mtime = os.path.getmtime(head_file)
+                if new_head_mtime > head_mtime:
+                    head_mtime = new_head_mtime
+                    with open(head_file, 'r') as f:
+                        head_content = f.read().strip()
+                    
+                    print(f"\n{Colors.GREEN}[{datetime.now().strftime('%H:%M:%S')}] HEAD changed: {head_content}{Colors.ENDC}")
+                    
+                    # Show current commit
+                    run_command("git log -1 --oneline")
+            
+            # Check index file (staging area)
+            if os.path.exists(index_file):
+                new_index_mtime = os.path.getmtime(index_file)
+                if new_index_mtime > index_mtime:
+                    index_mtime = new_index_mtime
+                    print(f"\n{Colors.GREEN}[{datetime.now().strftime('%H:%M:%S')}] Git index changed{Colors.ENDC}")
+                    
+                    # Show staged changes
+                    if verbose:
+                        run_command("git status -s")
+            
+            # Check for new commits in local branches
+            for branch_file in Path(refs_dir).glob("heads/*"):
+                if os.path.isfile(branch_file):
+                    branch_name = os.path.basename(branch_file)
+                    with open(branch_file, 'r') as f:
+                        commit_hash = f.read().strip()
+                    
+                    print(f"\n{Colors.GREEN}[{datetime.now().strftime('%H:%M:%S')}] Branch '{branch_name}' points to: {commit_hash}{Colors.ENDC}")
+            
+            time.sleep(interval)
+    
+    except KeyboardInterrupt:
+        print(f"\n{Colors.CYAN}Git directory monitoring stopped.{Colors.ENDC}")
+
+def main():
+    parser = argparse.ArgumentParser(description="Debug Git operations in real-time")
+    parser.add_argument("--verbose", action="store_true", help="Show verbose output")
+    parser.add_argument("--test-push", action="store_true", help="Perform a test push operation")
+    parser.add_argument("--monitor", action="store_true", help="Monitor .git directory for changes")
     args = parser.parse_args()
     
-    print_banner("GIT OPERATIONS DEBUGGING TOOL")
-    print(f"Current directory: {os.getcwd()}")
+    print_banner("AwaazTimetable Git Operations Debugger")
+    
+    # Show system information
     print(f"Python version: {sys.version}")
+    print(f"Current directory: {os.getcwd()}")
+    print(f"Time: {datetime.now().isoformat()}")
     
     # Check environment variables
-    env_ok = check_env_variables()
-    if not env_ok:
-        print("WARNING: Some required environment variables are not set!")
+    check_env_variables()
     
     # Check Git configuration
-    git_config_ok = check_git_config()
+    check_git_config()
     
     # Test Git connection
-    connection_ok = test_git_connection()
+    test_git_connection()
     
-    # Run full diagnostic if requested
-    if args.full_diagnostic:
-        try:
-            print("\nRunning full Git diagnostic...")
-            run_git_diagnostic()
-        except Exception as e:
-            print(f"Error running Git diagnostic: {str(e)}")
-    
-    # Create test file and commit if requested
-    if args.create_test_file:
+    # Create test commit and push if requested
+    if args.test_push:
         create_test_file_and_commit()
     
+    # Start monitoring in a separate thread if requested
+    if args.monitor:
+        monitor_thread = threading.Thread(
+            target=monitor_git_directory,
+            args=(2, args.verbose),
+            daemon=True
+        )
+        monitor_thread.start()
+        
+        try:
+            # Keep the main thread alive
+            while monitor_thread.is_alive():
+                monitor_thread.join(1)
+        except KeyboardInterrupt:
+            print("\nMonitoring stopped by user.")
+    
+    print_banner("Git Operations Debugging Complete")
+    
     # Summary
-    print_banner("DEBUGGING SUMMARY")
-    print(f"Environment Variables: {'✅ OK' if env_ok else '❌ Missing some variables'}")
-    print(f"Git Configuration: {'✅ OK' if git_config_ok else '❌ Issues detected'}")
-    print(f"Git Connection: {'✅ OK' if connection_ok else '❌ Connection failed'}")
+    if args.test_push:
+        print(f"{Colors.CYAN}Test push operation completed. Check the output above for results.{Colors.ENDC}")
     
-    if args.create_test_file:
-        print("Test File: Created and attempted to commit/push")
+    print(f"\n{Colors.GREEN}To fix Git authentication issues:{Colors.ENDC}")
+    print("1. Ensure GIT_REPO_URL, GIT_USERNAME, and GIT_TOKEN environment variables are set")
+    print("2. Verify the repository exists on GitHub")
+    print("3. Make sure your Personal Access Token has the 'repo' scope")
+    print("4. For Render.com, add these as environment variables in the dashboard")
     
-    print("\nFor detailed logs, check the application logs on Render.com")
+    return 0
 
 if __name__ == "__main__":
-    main() 
+    sys.exit(main()) 

@@ -1,8 +1,14 @@
-# Awaaz Flexy Timetable
+# AwaazTimetable
 
-A flexible scheduling system for caregivers, allowing for 24/7 schedule templates, checklists, and calendar management.
+A flexible 24/7 scheduling system for caregivers with Git-based data persistence.
 
-## Features
+![AwaazTimetable Dashboard](https://placehold.co/600x400/3f51b5/white?text=AwaazTimetable+Dashboard)
+
+## Overview
+
+AwaazTimetable is a comprehensive scheduling application designed specifically for caregiving organizations. It allows administrators to create weekly schedule templates, assign caregivers to time slots, configure checklists for each shift, and generate calendars from templates for specific time periods.
+
+### Key Features
 
 - Create weekly schedule templates with 2-hour blocks
 - Assign multiple caregivers to each time slot
@@ -12,482 +18,197 @@ A flexible scheduling system for caregivers, allowing for 24/7 schedule template
 - Track caregiver hours with max 40 hrs/week, 8 hrs/day, 5 days/week limits
 - Overtime calculation at 1.5x rate for hours above 40 per week
 - Mobile-responsive design for access on any device
-- Customizable shift durations
-- Predefined activities/tasks for checklist creation
-- Category-based organization of activity checklists
+- Customizable shift durations (2-hour blocks or custom lengths)
+- Real-time availability tracking for caregivers
+- Conflict detection when scheduling overlapping shifts
+- Dashboard with schedule overview and alerts
+- Reporting tools for hours worked and schedule adherence
+- Template preview functionality with multiple views for iterative refinement
+- Master list of predefined activities/tasks for checklist creation
+- Category-based organization of activity checklists by groups
 
-## Local Development
+## Git-Based Data Persistence
+
+AwaazTimetable uses an innovative Git-based data persistence system that ensures your data is safely stored and versioned, even when deployed on stateless platforms like Render.com.
+
+### How It Works
+
+1. **JSON File Storage**: All data (caregivers, templates, schedules, etc.) is stored as JSON files in the `data/` directory.
+2. **Git Version Control**: Each change to the data is automatically committed to a local Git repository.
+3. **Remote Backups**: Changes are pushed to a remote GitHub repository, ensuring data persists between container restarts.
+4. **Automatic Recovery**: On application startup, the latest data is pulled from the remote repository.
+
+### Benefits of Git-Based Persistence
+
+- **Stateless Deployment**: Perfect for container-based platforms like Render.com
+- **Version History**: Complete history of all data changes
+- **Disaster Recovery**: Easy restoration from any point in history
+- **Transparent Data**: Human-readable JSON files instead of opaque database files
+- **No Database Dependencies**: No need for external database services
+
+## Installation
 
 ### Prerequisites
-- Python 3.9+ (recommended: Python 3.9.18 as specified in runtime.txt)
-- pip
-- Git
 
-### Setup
+- Python 3.9+
+- Git installed and configured
+- GitHub account (for remote repository)
+
+### Local Development Setup
+
 1. Clone the repository:
-   ```
+   ```bash
    git clone https://github.com/yourusername/AwaazTimetable.git
    cd AwaazTimetable
    ```
 
 2. Create a virtual environment:
-   ```
+   ```bash
    python -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
 3. Install dependencies:
-   ```
+   ```bash
    pip install -r requirements.txt
    ```
 
-4. Run the application:
+4. Run the health check script to ensure your environment is set up correctly:
+   ```bash
+   python git_health_check.py --fix
    ```
+
+5. Set up necessary environment variables:
+   ```bash
+   # For bash/zsh
+   export GIT_REPO_URL="https://github.com/yourusername/AwaazTimetable.git"
+   export GIT_USERNAME="yourusername"
+   export GIT_TOKEN="your_personal_access_token"
+   
+   # For Windows CMD
+   set GIT_REPO_URL=https://github.com/yourusername/AwaazTimetable.git
+   set GIT_USERNAME=yourusername
+   set GIT_TOKEN=your_personal_access_token
+   ```
+
+6. Run the application:
+   ```bash
    python app.py
    ```
-   
-   **Alternative running methods:**
-   - If the above doesn't work, try running the main module directly:
-     ```
-     cd app
-     python main.py
-     ```
-   - Or using the wsgi module:
-     ```
-     python wsgi.py
-     ```
 
-5. Access the application at http://localhost:5000
+7. Access the application at `http://localhost:8000`
 
-### Troubleshooting Common Issues
+## Deployment on Render.com
 
-#### Python Version Compatibility
-This application is designed to work with Python 3.9. If you're using a newer version (like Python 3.13+), you might encounter compatibility issues with SQLAlchemy. To fix this:
+AwaazTimetable is designed to work seamlessly on Render.com's free tier, using Git for data persistence.
 
-```pip install --upgrade sqlalchemy flask-sqlalchemy flask-login flask-wtf
+### Setup Instructions
+
+1. Create a new Web Service on Render.com
+2. Connect your GitHub repository
+3. Configure the following settings:
+   - Build Command: `pip install -r requirements.txt`
+   - Start Command: `gunicorn 'app:create_app()'`
+4. Add the following environment variables:
+   - `GIT_REPO_URL`: Your GitHub repository URL
+   - `GIT_USERNAME`: Your GitHub username
+   - `GIT_TOKEN`: A GitHub personal access token with `repo` scope
+   - `SECRET_KEY`: A random string for Flask session security
+
+### Creating a GitHub Personal Access Token
+
+1. Go to GitHub Settings → Developer Settings → Personal Access Tokens → Tokens (classic)
+2. Click "Generate new token" → "Generate new token (classic)"
+3. Give it a name like "AwaazTimetable App"
+4. Set an expiration date
+5. Select the `repo` scope
+6. Click "Generate token"
+7. Copy the token immediately (you won't be able to see it again)
+
+## Git Persistence Troubleshooting
+
+If you encounter issues with the Git-based persistence system, use these diagnostic tools:
+
+### Health Check
+
+Run the comprehensive health check script:
+
+```bash
+python git_health_check.py
 ```
 
-#### Import Errors
-If you encounter import errors related to modules like 'forms' or 'models', check that you're running the application from the correct directory:
+To automatically fix issues:
 
-```python
-# Correct the import statements in app/main.py
-from .models import db, User, Caregiver, Template, Calendar, Shift, ChecklistItem, ActivityCategory, Activity
-from .forms import LoginForm, UserForm, CaregiverForm, TemplateForm
+```bash
+python git_health_check.py --fix
 ```
 
-#### Password Hash Compatibility Error
-If you encounter a `ValueError: unsupported hash type scrypt:32768:8:1` error on Render.com or another hosting platform, this is due to a hash algorithm incompatibility. To fix this:
+### Common Issues
 
-1. Modify the User model to use a more compatible hashing algorithm (already implemented in this repository):
-   ```python
-   def set_password(self, password):
-       self.password_hash = generate_password_hash(password, method='pbkdf2:sha256')
-   ```
+1. **"Repository not found" error**:
+   - Ensure the repository exists on GitHub
+   - Verify your GitHub username and token are correct
+   - Check that environment variables are set correctly
 
-2. For existing databases with users, run the password upgrade script:
-   ```
-   cd app
-   python upgrade_passwords.py
-   ```
+2. **"Push failed" error**:
+   - Ensure your token has the correct permissions
+   - Check if there are conflicts between local and remote repositories
 
-3. Update your requirements.txt to pin Werkzeug to a compatible version (if needed):
-   ```
-   Werkzeug==2.0.3
-   Flask==2.0.3
-   ```
-
-4. Make sure your Render.com environment has the correct Python version:
-   - Add `PYTHON_VERSION=3.9.18` to your environment variables
-
-#### Database Issues
-If you encounter database errors:
-
-```
-python app/fix_db.py
-```
-
-This will ensure necessary columns exist in your database schema.
-
-## Deployment
-
-The application is ready for deployment to cloud platforms like Render, Heroku, or PythonAnywhere.
-
-### Deploying to Render.com
-
-1. **Create a Render.com account**
-   - Sign up at [render.com](https://render.com/) if you don't have an account
-
-2. **Connect your GitHub repository**
-   - In your Render dashboard, go to the "Blueprints" section
-   - Click "New Blueprint Instance"
-   - Connect your GitHub account and select your repository
-
-3. **Create a new Web Service**
-   - Click on "New Web Service" in your dashboard
-   - Connect your GitHub repository
-   - Choose "Python" as the environment
-
-4. **Configure your service**
-   - **Name**: Choose a name for your service (e.g., awaaz-timetable)
-   - **Environment**: Python 3.9
-   - **Region**: Choose the region closest to your users
-   - **Branch**: main (or your preferred branch)
-   - **Build Command**: `pip install -r requirements.txt && python fix_render.py`
-   - **Start Command**: `gunicorn 'app:create_app()'`
-   - **Instance Type**: Free (for development) or Basic (for production)
-
-5. **Set Environment Variables**
-   - Scroll down to the "Environment Variables" section and add:
-     - `SECRET_KEY`: A secure random string (e.g., generate one using `openssl rand -hex 24`)
-     - `PYTHON_VERSION`: 3.9.18
-     - `DATABASE_URL`: (Optional) If using PostgreSQL, add your database connection string
-
-6. **Create Database (Optional)**
-   - For a production environment, you may want to use PostgreSQL instead of SQLite
-   - Create a PostgreSQL database in Render.com
-   - Connect it to your web service using the `DATABASE_URL` environment variable
-
-7. **Deploy your application**
-   - Click "Create Web Service"
-   - Render will build and deploy your application
-
-8. **Access your deployed application**
-   - Once deployment is complete, click on the URL provided by Render
-   - You can also set up a custom domain in the settings
-
-### Custom Domain Setup on Render.com (Optional)
-
-1. Go to your Web Service in Render
-2. Navigate to the "Settings" tab
-3. Scroll to "Custom Domain"
-4. Add your domain and follow the instructions to configure DNS settings
-
-### Deploying to Heroku
-
-1. Install the Heroku CLI
-2. Login to Heroku:
-   ```
-   heroku login
-   ```
-3. Create a new Heroku app:
-   ```
-   heroku create awaaz-timetable
-   ```
-4. Add a PostgreSQL database:
-   ```
-   heroku addons:create heroku-postgresql:hobby-dev
-   ```
-5. Deploy the application:
-   ```
-   git push heroku main
-   ```
-6. Open the application:
-   ```
-   heroku open
-   ```
-
-## Default Access
-
-The application now runs without login requirements. All features are accessible directly from the dashboard.
-
-The User authentication system has been removed to simplify deployment and avoid compatibility issues with password hashing on different platforms.
-
-## Tech Stack
-
-- **Backend**: Python with Flask
-- **Data Storage**: Git-based JSON file database (no SQL database required)
-- **Frontend**: HTML, CSS, JavaScript, Bootstrap 5
-- **Containerization**: Docker (optional)
-
-## Git-Based Database
-
-This application uses a novel approach to data persistence - using Git as a database! Instead of a traditional SQL database, all data is stored in JSON files in the `data/` directory, and changes are automatically committed and pushed to the Git repository.
-
-### How It Works
-
-1. **Data Storage**: All data is stored as JSON files in subdirectories of the `data/` directory
-2. **Automated Commits**: When data changes, the system automatically creates Git commits
-3. **Persistence**: Because data is committed to Git, it persists even on hosting platforms with ephemeral disks
-4. **Version History**: All data changes are tracked with Git's version history
-
-### Benefits of Git-Based Storage
-
-- **No Database Setup**: No need to configure PostgreSQL or SQLite
-- **Full Persistence**: Data is stored in Git, so it persists regardless of hosting platform limitations
-- **Version History**: Full history of all data changes through Git commits
-- **Simplicity**: No complex database connections or migrations
-
-### For Hosting on Render.com
-
-When hosting on Render.com's free tier, this approach solves the ephemeral storage issue. Since data is stored in the Git repository, it persists between deployments and restarts.
-
-To use this feature, set the following environment variables in Render:
-- `GIT_USERNAME`: Your GitHub username
-- `GIT_EMAIL`: Your GitHub email
-- `GIT_TOKEN`: A GitHub personal access token with repo permissions
+3. **"Authentication failed" error**:
+   - Verify your GitHub username and token
+   - Ensure the token hasn't expired
 
 ## Project Structure
 
 ```
-AwaazFlexyTimetable/
-├── app/                    # Application code
-│   ├── templates/          # HTML templates
-│   │   ├── calendars/      # Calendar-related templates
-│   │   └── templates/      # Template-related templates
-│   ├── main.py             # Main Flask application
-│   ├── models.py           # Database models
-│   ├── forms.py            # Form definitions
-│   └── fix_db.py           # Database migration helper
-├── app.py                  # Application entry point
-├── wsgi.py                 # WSGI entry point for production servers
-├── requirements.txt        # Python dependencies
-├── runtime.txt             # Python version for deployment
-├── Procfile                # Heroku configuration
-└── README.md               # Project documentation
+AwaazTimetable/
+├── app/                        # Main application package
+│   ├── __init__.py            # Package initializer
+│   ├── main.py                # Flask application logic
+│   ├── models.py              # SQLAlchemy model definitions
+│   ├── forms.py               # Flask-WTF form definitions
+│   ├── gitdb.py               # Git-based database functionality
+│   ├── git_utils.py           # Git utility functions
+│   ├── setup_render_repo.py   # Repository setup for Render.com
+│   └── templates/             # Jinja2 HTML templates
+├── data/                      # Data directory (JSON files)
+│   ├── meta.json              # Metadata for IDs
+│   ├── caregivers/            # Caregiver JSON files
+│   ├── templates/             # Template JSON files
+│   ├── calendars/             # Calendar JSON files
+│   ├── shifts/                # Shift assignment files
+│   ├── checklists/            # Checklist item files
+│   ├── activities/            # Activity JSON files
+│   └── activity_categories/   # Activity category files
+├── git_health_check.py        # Health check and fix script
+├── test_git_connection.py     # Connection test script
+├── app.py                     # Application entry point
+├── requirements.txt           # Python dependencies
+├── Procfile                   # Render.com deployment config
+└── runtime.txt                # Python version specification
 ```
 
-## Usage Guide
+## Data Structure
 
-### Creating Templates
+The application stores all data as JSON files in the `data/` directory:
 
-1. Log in to the system
-2. Navigate to "Templates" and create a new template
-3. Assign caregivers to time slots
-4. Add checklist items for tasks to be completed during each time slot
-5. Save the template
+- **meta.json**: Stores metadata including ID counters
+- **caregivers/*.json**: One file per caregiver
+- **templates/*.json**: One file per schedule template
+- **calendars/*.json**: One file per generated calendar
+- **shifts/*.json**: Shift assignments by template/calendar
+- **checklists/*.json**: Checklist items by template/calendar
+- **activities/*.json**: Activity definitions
+- **activity_categories/*.json**: Activity category definitions
 
-### Creating Calendars
+## Contributing
 
-1. Navigate to "Calendars" and create a new calendar
-2. Select a template to base the calendar on
-3. Select a start date
-4. The calendar will be created with the shifts and checklist items from the template
-
-### Managing Caregivers
-
-1. Administrators can manage caregivers from the "Manage Caregivers" section
-2. Add new caregivers with their work hour limitations and hourly rates
-3. Edit or delete existing caregivers
-
-### Managing Activities
-
-1. Administrators can manage activity categories and activities
-2. Create categories to organize related activities
-3. Add activities with descriptions within each category
-4. Use activities when creating checklist items in templates
-
-### Viewing Reports
-
-1. Navigate to a calendar
-2. Click the "Reports" button
-3. View various metrics and analytics, including:
-   - Caregiver hours and status
-   - Coverage heatmap
-   - Cost calculations including overtime
-   - Summary statistics
-   - Daily distribution
-
-### Managing Checklist Items
-
-1. Checklist items can be created when setting up templates
-2. Each 2-hour time slot can have multiple checklist items
-3. When a template is used to create a calendar, the checklist items are copied
-4. In calendar view, checklist items can be toggled (marked as complete/incomplete)
-
-#### Implementing the Checklist Toggle Functionality
-
-The frontend already contains a `toggleChecklistItem()` function in the calendar view (app/templates/calendars/view.html). To make this function work:
-
-1. Add an API endpoint in app/main.py:
-
-```python
-@app.route('/api/calendars/checklist/<int:item_id>/toggle', methods=['POST'])
-@login_required
-def toggle_checklist_item(item_id):
-    item = ChecklistItem.query.get_or_404(item_id)
-    
-    # Toggle the completion status
-    item.completed = not item.completed
-    db.session.commit()
-    
-    return jsonify({
-        'success': True,
-        'item': item.to_dict()
-    })
-```
-
-2. Update the `toggleChecklistItem()` function in app/templates/calendars/view.html to call this endpoint:
-
-```javascript
-// Toggle checklist item completion
-function toggleChecklistItem(itemId, completed) {
-    // Update local data
-    const item = calendarData.checklists.find(item => item.id === itemId);
-    if (item) {
-        item.completed = completed;
-    }
-    
-    // Send update to server
-    fetch(`/api/calendars/checklist/${itemId}/toggle`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (!data.success) {
-            console.error('Error toggling checklist item:', data);
-            // Revert UI if there was an error
-            if (item) {
-                item.completed = !completed;
-                const checkbox = document.querySelector(`.checklist-toggle[data-item-id="${itemId}"]`);
-                if (checkbox) checkbox.checked = !completed;
-            }
-        }
-    })
-    .catch(error => {
-        console.error('Error toggling checklist item:', error);
-    });
-}
-```
-
-3. Make sure you have a CSRF token meta tag in your base template:
-
-```html
-<!-- Add this to your base.html head section -->
-<meta name="csrf-token" content="{{ csrf_token() }}">
-```
-
-## Development with Docker
-
-To run the application using Docker:
-
-1. Make sure Docker and Docker Compose are installed
-2. Run the application:
-   ```bash
-   docker-compose up
-   ```
-3. The application will be available at http://localhost:5000
-4. The application will reload automatically when changes are made to the code
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-# AwaazTimetable - Git-Based Data Persistence Setup
+## Support
 
-This guide explains how to set up and troubleshoot the Git-based data persistence system for the AwaazTimetable application.
-
-## Overview
-
-The AwaazTimetable application uses Git to persist data by committing changes to a local repository and pushing them to a remote GitHub repository. This ensures data is preserved even when the Render.com container is restarted.
-
-## Required Environment Variables
-
-For Git persistence to work properly, you need to set the following environment variables in your Render.com dashboard:
-
-1. `GIT_REPO_URL` - URL of your GitHub repository (e.g., `https://github.com/yourusername/AwaazTimetable.git`)
-2. `GIT_USERNAME` - Your GitHub username
-3. `GIT_TOKEN` - A GitHub Personal Access Token with "repo" permissions
-
-Optional:
-- `GIT_EMAIL` - Email to use for Git commits (defaults to `app@awaaz-timetable.com`)
-
-## Setup Process
-
-### 1. Create a GitHub Repository
-
-1. Log in to GitHub
-2. Create a new repository named "AwaazTimetable" (or your preferred name)
-3. Make it private if you want to secure your data
-4. Do not initialize with README, .gitignore, or license
-
-### 2. Create a Personal Access Token
-
-1. Go to GitHub Settings → Developer settings → Personal access tokens → Generate new token
-2. Give it a descriptive name like "AwaazTimetable App"
-3. Select the "repo" scope to allow full access to repositories
-4. Generate the token and copy it - you won't be able to see it again!
-
-### 3. Configure Render.com Environment Variables
-
-In your Render.com dashboard:
-
-1. Go to your AwaazTimetable service
-2. Navigate to Environment → Environment Variables
-3. Add the following variables:
-   - `GIT_REPO_URL=https://github.com/yourusername/AwaazTimetable.git`
-   - `GIT_USERNAME=yourusername`
-   - `GIT_TOKEN=your_personal_access_token`
-4. Save changes and deploy
-
-### 4. Verify the Setup
-
-You can verify your Git setup is working by:
-
-1. Looking at application logs in Render.com for successful Git operations
-2. Checking your GitHub repository to see if data is being pushed
-3. Running the included test script on your local machine:
-
-```bash
-GIT_REPO_URL=https://github.com/yourusername/AwaazTimetable.git \
-GIT_USERNAME=yourusername \
-GIT_TOKEN=your_personal_access_token \
-python test_git_connection.py
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Authentication Failures**
-   - Check that your GitHub token hasn't expired
-   - Verify the token has the "repo" scope
-   - Ensure the username matches the token owner
-
-2. **Repository Not Found**
-   - Verify the repository exists on GitHub
-   - Check if the URL is correct
-   - Ensure your token has access to the repository
-
-3. **Push Failures**
-   - Check if the repository was initialized properly
-   - Verify there are no conflicts between local and remote
-
-4. **No Git Operations in Logs**
-   - Verify all environment variables are set
-   - Check if the application has created a .git directory
-   - Run the diagnostic function to gather more information
-
-### Running Diagnostics
-
-The application includes built-in diagnostic functions. You can run them by:
-
-1. SSH into your Render.com instance or run locally
-2. Navigate to the application directory
-3. Open a Python console:
-   ```python
-   from app.git_utils import run_git_diagnostic
-   run_git_diagnostic()
-   ```
-
-Alternatively, you can run the standalone test script:
-```bash
-python test_git_connection.py
-```
-
-## How It Works
-
-The application:
-
-1. Sets up a local Git repository during initialization
-2. Configures the remote repository based on environment variables
-3. Creates necessary data directories and commits them
-4. Commits changes to data files when operations occur
-5. Pushes commits to the remote repository for persistence
-6. Handles common Git errors and retries operations when needed
-
-All Git operations include detailed logging with clear visual banners indicating the operation being performed and its outcome. 
+If you need help with AwaazTimetable, please create an issue in the GitHub repository. 
