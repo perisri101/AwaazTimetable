@@ -1,0 +1,18 @@
+[
+  {
+    "description": "Laundry",
+    "day_of_week": 0,
+    "start_hour": 0,
+    "end_hour": 2,
+    "activity_id": 3,
+    "id": 189
+  },
+  {
+    "description": "Laundry",
+    "day_of_week": 4,
+    "start_hour": 0,
+    "end_hour": 2,
+    "activity_id": 3,
+    "id": 190
+  }
+]
