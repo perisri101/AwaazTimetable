@@ -36,7 +36,13 @@
                         <tr>
                             <td>{{ category.name }}</td>
                             <td>{{ category.description }}</td>
-                            <td>{{ category.created_at.strftime('%Y-%m-%d') }}</td>
+                            <td>
+                                {% if category.created_at is string %}
+                                    {{ category.created_at.split('T')[0] if 'T' in category.created_at else category.created_at }}
+                                {% else %}
+                                    {{ category.created_at.strftime('%Y-%m-%d') }}
+                                {% endif %}
+                            </td>
                             <td>
                                 <button type="button" class="btn btn-sm btn-primary edit-category-btn" 
                                         data-bs-toggle="modal" data-bs-target="#editCategoryModal"

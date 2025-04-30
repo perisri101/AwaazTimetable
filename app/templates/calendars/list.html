@@ -30,7 +30,13 @@
                             <div class="card-body">
                                 <h5 class="card-title">{{ calendar.name }}</h5>
                                 <p class="card-text">{{ calendar.description }}</p>
-                                <p class="text-muted small">Start Date: {{ calendar.start_date.strftime('%Y-%m-%d') }}</p>
+                                <p class="text-muted small">Start Date: 
+                                {% if calendar.start_date is string %}
+                                    {{ calendar.start_date.split('T')[0] if 'T' in calendar.start_date else calendar.start_date }}
+                                {% else %}
+                                    {{ calendar.start_date.strftime('%Y-%m-%d') }}
+                                {% endif %}
+                                </p>
                                 <p class="text-muted small">Template: {{ calendar.template.name }}</p>
                             </div>
                             <div class="card-footer bg-transparent">

@@ -140,7 +140,12 @@
         <h1>Reports: {{ calendar.name }}</h1>
         <p class="lead">Performance metrics and utilization reports</p>
         <p>
-            <strong>Start Date:</strong> {{ calendar.start_date.strftime('%Y-%m-%d') }} | 
+            <strong>Start Date:</strong> 
+            {% if calendar.start_date is string %}
+                {{ calendar.start_date.split('T')[0] if 'T' in calendar.start_date else calendar.start_date }}
+            {% else %}
+                {{ calendar.start_date.strftime('%Y-%m-%d') }}
+            {% endif %} | 
             <strong>Template:</strong> {{ calendar.template.name }}
         </p>
     </div>

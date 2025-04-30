@@ -30,7 +30,13 @@
                             <div class="card-body">
                                 <h5 class="card-title">{{ template.name }}</h5>
                                 <p class="card-text">{{ template.description }}</p>
-                                <p class="text-muted small">Created: {{ template.created_at.strftime('%Y-%m-%d') }}</p>
+                                <p class="text-muted small">Created: 
+                                {% if template.created_at is string %}
+                                    {{ template.created_at.split('T')[0] if 'T' in template.created_at else template.created_at }}
+                                {% else %}
+                                    {{ template.created_at.strftime('%Y-%m-%d') }}
+                                {% endif %}
+                                </p>
                             </div>
                             <div class="card-footer bg-transparent">
                                 <div class="d-flex justify-content-between">

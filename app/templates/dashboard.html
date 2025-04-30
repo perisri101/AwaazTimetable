@@ -26,7 +26,13 @@
                     <a href="{{ url_for('edit_template', id=template.id) }}" class="list-group-item list-group-item-action">
                         <div class="d-flex w-100 justify-content-between">
                             <h5 class="mb-1">{{ template.name }}</h5>
-                            <small>{{ template.created_at.strftime('%Y-%m-%d') }}</small>
+                            <small>
+                            {% if template.created_at is string %}
+                                {{ template.created_at.split('T')[0] if 'T' in template.created_at else template.created_at }}
+                            {% else %}
+                                {{ template.created_at.strftime('%Y-%m-%d') }}
+                            {% endif %}
+                            </small>
                         </div>
                         <p class="mb-1">{{ template.description }}</p>
                     </a>
@@ -60,7 +66,13 @@
                     <a href="{{ url_for('view_calendar', id=calendar.id) }}" class="list-group-item list-group-item-action">
                         <div class="d-flex w-100 justify-content-between">
                             <h5 class="mb-1">{{ calendar.name }}</h5>
-                            <small>{{ calendar.start_date.strftime('%Y-%m-%d') }}</small>
+                            <small>
+                            {% if calendar.start_date is string %}
+                                {{ calendar.start_date.split('T')[0] if 'T' in calendar.start_date else calendar.start_date }}
+                            {% else %}
+                                {{ calendar.start_date.strftime('%Y-%m-%d') }}
+                            {% endif %}
+                            </small>
                         </div>
                         <p class="mb-1">{{ calendar.description }}</p>
                         <small>Based on template: {{ calendar.template.name }}</small>
