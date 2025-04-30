@@ -270,8 +270,28 @@ def edit_template(id):
 @csrf.exempt
 @app.route('/api/templates/<int:id>/shifts')
 def get_template_shifts(id):
-    shifts = gitdb.get_template_shifts(id)
-    return jsonify(shifts)
+    try:
+        # Get template shifts from gitdb
+        shifts = gitdb.get_template_shifts(id)
+        
+        # Get template checklists from gitdb
+        checklists = gitdb.get_template_checklists(id)
+        
+        # Create a structured response
+        response = {
+            'shifts': shifts if isinstance(shifts, list) else [],
+            'checklists': checklists if isinstance(checklists, list) else []
+        }
+        
+        return jsonify(response)
+    except Exception as e:
+        app.logger.error(f"Error retrieving template data: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error retrieving template data: {str(e)}',
+            'shifts': [],
+            'checklists': []
+        }), 500
 
 @csrf.exempt
 @app.route('/api/templates/<int:id>/shifts', methods=['POST'])
@@ -286,17 +306,87 @@ def update_template_shifts(id):
     if not template:
         return jsonify({'success': False, 'message': 'Template not found'}), 404
     
+    # Validate the data format
+    if not isinstance(data, dict):
+        return jsonify({'success': False, 'message': 'Invalid data format. Expected JSON object'}), 400
+    
+    # Extract shifts and checklists arrays, ensuring they're properly formatted
     shifts = data.get('shifts', [])
     checklists = data.get('checklists', [])
     
-    # Assign IDs to new checklist items
+    # Ensure shifts is an array
+    if not isinstance(shifts, list):
+        return jsonify({'success': False, 'message': 'Shifts must be an array'}), 400
+    
+    # Ensure checklists is an array
+    if not isinstance(checklists, list):
+        return jsonify({'success': False, 'message': 'Checklists must be an array'}), 400
+    
+    # Validate and clean up each shift object
+    for i, shift in enumerate(shifts):
+        # Ensure required fields exist and are integers
+        if 'caregiver_id' not in shift:
+            return jsonify({'success': False, 'message': f'Shift at index {i} is missing caregiver_id'}), 400
+        
+        if 'day_of_week' not in shift:
+            return jsonify({'success': False, 'message': f'Shift at index {i} is missing day_of_week'}), 400
+        
+        if 'start_hour' not in shift:
+            return jsonify({'success': False, 'message': f'Shift at index {i} is missing start_hour'}), 400
+        
+        if 'end_hour' not in shift:
+            return jsonify({'success': False, 'message': f'Shift at index {i} is missing end_hour'}), 400
+        
+        # Convert to integers if they're not already
+        try:
+            shift['caregiver_id'] = int(shift['caregiver_id'])
+            shift['day_of_week'] = int(shift['day_of_week'])
+            shift['start_hour'] = int(shift['start_hour'])
+            shift['end_hour'] = int(shift['end_hour'])
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'message': f'Shift at index {i} has invalid numeric values'}), 400
+    
+    # Validate and clean up each checklist item
     for i, item in enumerate(checklists):
+        # Ensure required fields exist
+        if 'description' not in item:
+            return jsonify({'success': False, 'message': f'Checklist item at index {i} is missing description'}), 400
+        
+        if 'day_of_week' not in item:
+            return jsonify({'success': False, 'message': f'Checklist item at index {i} is missing day_of_week'}), 400
+        
+        if 'start_hour' not in item:
+            return jsonify({'success': False, 'message': f'Checklist item at index {i} is missing start_hour'}), 400
+        
+        if 'end_hour' not in item:
+            return jsonify({'success': False, 'message': f'Checklist item at index {i} is missing end_hour'}), 400
+        
+        # Convert numeric fields to integers
+        try:
+            item['day_of_week'] = int(item['day_of_week'])
+            item['start_hour'] = int(item['start_hour'])
+            item['end_hour'] = int(item['end_hour'])
+            
+            # Convert activity_id to integer if present and not null
+            if item.get('activity_id') is not None:
+                item['activity_id'] = int(item['activity_id'])
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'message': f'Checklist item at index {i} has invalid numeric values'}), 400
+        
+        # Assign ID to new checklist items
         if not item.get('id'):
             item['id'] = gitdb._get_next_id('checklist_item')
     
-    # Save template shifts and checklists
-    gitdb.save_template_shifts(id, shifts)
-    gitdb.save_template_checklists(id, checklists)
+    try:
+        # Save template shifts and checklists
+        gitdb.save_template_shifts(id, shifts)
+        gitdb.save_template_checklists(id, checklists)
+    except Exception as e:
+        app.logger.error(f"Error saving template data: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Error saving template data: {str(e)}'
+        }), 500
     
     return jsonify({
         'success': True, 

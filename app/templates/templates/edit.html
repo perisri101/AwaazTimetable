@@ -295,7 +295,13 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch('{{ url_for("get_template_shifts", id=template.id) }}')
             .then(response => response.json())
             .then(data => {
-                templateData = data;
+                // Initialize templateData with default empty arrays if not present
+                templateData = {
+                    shifts: Array.isArray(data.shifts) ? data.shifts : [],
+                    checklists: Array.isArray(data.checklists) ? data.checklists : []
+                };
+                
+                console.log('Loaded template data:', templateData);
                 
                 // Render shifts
                 templateData.shifts.forEach(shift => {
@@ -313,7 +319,7 @@ document.addEventListener('DOMContentLoaded', function() {
             .catch(error => {
                 console.error('Error loading template data:', error);
                 document.getElementById('loadingOverlay').style.display = 'none';
-                alert('An error occurred while loading template data.');
+                alert('An error occurred while loading template data: ' + error.message);
             });
     }
     
