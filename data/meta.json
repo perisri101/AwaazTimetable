@@ -1,11 +1,11 @@
 {
   "next_ids": {
     "caregiver": 16,
-    "template": 1,
+    "template": 2,
     "calendar": 1,
     "shift": 1,
     "checklist_item": 1,
     "activity": 1,
-    "activity_category": 1
+    "activity_category": 5
   }
 }
