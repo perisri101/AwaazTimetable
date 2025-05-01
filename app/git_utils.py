@@ -245,6 +245,57 @@ def setup_git_credentials(repo_path):
         print(f"Git setup failed, persistence through Git will be disabled: {str(e)}")
         return False
 
+def check_and_fix_detached_head(repo_path):
+    """
+    Check if the repository is in a detached HEAD state and fix it
+    """
+    try:
+        logger.info("Checking if repository is in detached HEAD state")
+        
+        # Check if HEAD is detached
+        try:
+            # This command will succeed if HEAD is attached to a branch
+            subprocess.check_output(['git', 'symbolic-ref', 'HEAD'], stderr=subprocess.PIPE, cwd=repo_path)
+            logger.info("Repository is on a proper branch")
+            return True
+        except subprocess.CalledProcessError:
+            # HEAD is detached, need to fix it
+            logger.warning("Repository is in DETACHED HEAD state! Attempting to fix...")
+            
+            # Get the current commit
+            current_commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=repo_path).decode('utf-8').strip()
+            logger.info(f"Current commit: {current_commit}")
+            
+            # Check if main branch exists
+            branches = subprocess.check_output(['git', 'branch'], cwd=repo_path).decode('utf-8').split('\n')
+            main_branches = [b.strip('* ') for b in branches if 'main' in b or 'master' in b]
+            
+            if main_branches:
+                branch_name = main_branches[0]
+                logger.info(f"Found existing branch: {branch_name}")
+                
+                # Checkout the existing branch
+                subprocess.run(['git', 'checkout', branch_name], cwd=repo_path, check=True)
+                logger.info(f"Checked out branch: {branch_name}")
+                
+                # Ensure the branch points to our current commit (if ahead)
+                subprocess.run(['git', 'reset', '--hard', current_commit], cwd=repo_path, check=True)
+                logger.info(f"Reset {branch_name} to current commit: {current_commit}")
+            else:
+                # Create a new main branch at the current commit
+                logger.info("No main/master branch found, creating new 'main' branch")
+                subprocess.run(['git', 'checkout', '-b', 'main'], cwd=repo_path, check=True)
+                logger.info("Created and checked out new 'main' branch")
+            
+            # Verify we're now on a branch
+            branch = subprocess.check_output(['git', 'branch', '--show-current'], cwd=repo_path).decode('utf-8').strip()
+            logger.info(f"Repository is now on branch: {branch}")
+            return True
+    except Exception as e:
+        logger.error(f"Error fixing detached HEAD: {str(e)}")
+        logger.error(traceback.format_exc())
+        return False
+
 def commit_and_push(message):
     """
     Commit and push changes to the Git repository
@@ -265,6 +316,10 @@ def commit_and_push(message):
             logger.error(f"No .git directory found at {repo_path} - Git operations will fail!")
             print(f"No .git directory found at {repo_path} - Git operations will fail!")
             return False
+        
+        # Check and fix detached HEAD state if necessary
+        if not check_and_fix_detached_head(repo_path):
+            logger.warning("Failed to fix detached HEAD state, but continuing with commit attempt")
             
         # Verify and setup Git remote if needed
         try:
@@ -388,102 +443,108 @@ def commit_and_push(message):
                 # Maximum number of push attempts
                 max_attempts = 3
                 
-                # Try to push several times
-                for attempt in range(max_attempts):
-                    try:
-                        # Detect the current branch
-                        branch_result = subprocess.run(
-                            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
-                            cwd=repo_path,
-                            capture_output=True,
-                            text=True,
-                            check=True
-                        )
-                        current_branch = branch_result.stdout.strip()
+                # Get the current branch name
+                branch_result = subprocess.run(
+                    ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
+                    cwd=repo_path,
+                    capture_output=True,
+                    text=True,
+                    check=True
+                )
+                current_branch = branch_result.stdout.strip()
+                
+                # If we're in a detached HEAD state, we need to use a different approach
+                if current_branch == 'HEAD':
+                    logger.warning("We are in a detached HEAD state, will try to push to main branch")
+                    current_branch = 'main'  # Default to main branch
+                
+                logger.info(f"Current branch is '{current_branch}', preparing to push")
+                
+                # Try to push several times with different methods
+                push_methods = [
+                    # Method 1: Push to specific branch
+                    ['git', 'push', 'origin', f"{current_branch}"],
+                    # Method 2: Push with explicit refspec
+                    ['git', 'push', 'origin', f"HEAD:refs/heads/{current_branch}"],
+                    # Method 3: Simple push with upstream tracking
+                    ['git', 'push', '-u', 'origin', current_branch],
+                    # Method 4: Force push if needed
+                    ['git', 'push', '-f', 'origin', current_branch],
+                    # Method 5: Simple push
+                    ['git', 'push']
+                ]
+                
+                success = False
+                
+                for method_index, push_command in enumerate(push_methods):
+                    if success:
+                        break
                         
-                        logger.info(f"Current branch is '{current_branch}', preparing to push")
-                        
-                        # Push to the remote repository using a more explicit refspec
-                        # Format: HEAD:refs/heads/branch_name (this is more robust)
-                        push_command = ['git', 'push', 'origin', f"HEAD:refs/heads/{current_branch}"]
-                        logger.info(f"Executing push command: {' '.join(push_command)}")
-                        
-                        push_result = subprocess.run(
-                            push_command,
-                            cwd=repo_path,
-                            capture_output=True,
-                            text=True,
-                            check=True
-                        )
-                        
-                        log_banner("GIT PUSH SUCCESSFUL")
-                        logger.info("Changes pushed to remote repository")
-                        logger.info(f"Push details: {push_result.stdout}")
-                        print("Changes pushed to remote repository")
-                        return True
-                    except subprocess.CalledProcessError as e:
-                        logger.warning(f"Git push failed (attempt {attempt+1}/{max_attempts}): {str(e)}")
-                        if e.stderr:
-                            logger.warning(f"Error details: error: {e.stderr}")
+                    for attempt in range(max_attempts):
+                        try:
+                            logger.info(f"Trying push method {method_index+1}/{len(push_methods)}, attempt {attempt+1}/{max_attempts}")
+                            logger.info(f"Executing push command: {' '.join(push_command)}")
                             
-                            # Check for specific error messages and provide better feedback
-                            stderr = e.stderr
-                            if "Repository not found" in stderr:
-                                logger.error("DIAGNOSIS: The repository does not exist or is not accessible")
-                                logger.error("ACTION NEEDED: Verify the repository exists at the specified URL")
-                            elif "Authentication failed" in stderr:
-                                logger.error("DIAGNOSIS: Authentication failed - invalid credentials")
-                                logger.error("ACTION NEEDED: Check your GIT_USERNAME and GIT_TOKEN")
-                            elif "not a full refname" in stderr or "starting with \"refs/\"" in stderr:
-                                logger.error("DIAGNOSIS: Invalid Git reference name format")
-                                logger.error("ACTION NEEDED: Fixing the push command format - will retry with different format")
-                                # Try alternative push syntax if this error occurs
-                                try:
-                                    logger.info("Attempting alternative push command format...")
-                                    alt_push_result = subprocess.run(
-                                        ['git', 'push', 'origin', 'HEAD'],
-                                        cwd=repo_path,
-                                        capture_output=True,
-                                        text=True,
-                                        check=True
-                                    )
-                                    log_banner("GIT PUSH SUCCESSFUL WITH ALTERNATIVE FORMAT")
-                                    logger.info("Changes pushed to remote repository using alternative format")
-                                    return True
-                                except subprocess.CalledProcessError as alt_e:
-                                    logger.warning(f"Alternative push format also failed: {alt_e.stderr}")
-                        
-                        print(f"Git push failed (attempt {attempt+1}/{max_attempts}): Check logs for details")
-                        if attempt < max_attempts - 1:
-                            logger.info(f"Waiting 3 seconds before retry...")
-                            time.sleep(3)
+                            push_result = subprocess.run(
+                                push_command,
+                                cwd=repo_path,
+                                capture_output=True,
+                                text=True,
+                                check=True
+                            )
+                            
+                            log_banner("GIT PUSH SUCCESSFUL")
+                            logger.info("Changes pushed to remote repository")
+                            logger.info(f"Push details: {push_result.stdout}")
+                            print("Changes pushed to remote repository")
+                            success = True
+                            break
+                        except subprocess.CalledProcessError as e:
+                            logger.warning(f"Git push failed (method {method_index+1}, attempt {attempt+1}): {str(e)}")
+                            if e.stderr:
+                                logger.warning(f"Error details: error: {e.stderr}")
+                                
+                                # Check for specific error messages and provide better feedback
+                                stderr = e.stderr
+                                if "Repository not found" in stderr:
+                                    logger.error("DIAGNOSIS: The repository does not exist or is not accessible")
+                                    logger.error("ACTION NEEDED: Verify the repository exists at the specified URL")
+                                elif "Authentication failed" in stderr:
+                                    logger.error("DIAGNOSIS: Authentication failed - invalid credentials")
+                                    logger.error("ACTION NEEDED: Check your GIT_USERNAME and GIT_TOKEN")
+                                elif "not a full refname" in stderr or "starting with \"refs/\"" in stderr:
+                                    logger.error("DIAGNOSIS: Invalid Git reference name format")
+                                    logger.error("ACTION NEEDED: Trying alternative push methods")
+                                elif "detached HEAD" in stderr:
+                                    logger.error("DIAGNOSIS: Repository is in detached HEAD state")
+                                    logger.error("ACTION NEEDED: Will try to fix this in the next method")
+                                elif "fetch first" in stderr or "rejected" in stderr:
+                                    logger.error("DIAGNOSIS: Remote has changes that we don't have locally")
+                                    logger.error("ACTION NEEDED: Trying to pull first before push")
+                                    
+                                    # Try to pull changes first
+                                    try:
+                                        logger.info("Attempting to pull changes from remote...")
+                                        subprocess.run(
+                                            ['git', 'pull', 'origin', current_branch, '--allow-unrelated-histories'],
+                                            cwd=repo_path,
+                                            capture_output=True,
+                                            text=True,
+                                            check=True
+                                        )
+                                        logger.info("Pull successful, retrying push")
+                                        # Continue to next attempt which will retry the push
+                                    except subprocess.CalledProcessError as pull_e:
+                                        logger.warning(f"Pull failed: {pull_e.stderr}")
+                                        # Continue to next method
+                            
+                            print(f"Git push failed (method {method_index+1}, attempt {attempt+1}): Check logs for details")
+                            if attempt < max_attempts - 1:
+                                logger.info(f"Waiting 3 seconds before retry...")
+                                time.sleep(3)
                 
-                # If we reach here, all attempts failed
-                log_banner("GIT PUSH FAILED - TRYING FALLBACK METHOD")
-                logger.warning("All standard push attempts failed, trying fallback method")
-                
-                # Final fallback attempt with simplest push command
-                try:
-                    # Try a simple git push without any arguments
-                    logger.info("Attempting final fallback push method: simple 'git push'")
-                    fallback_result = subprocess.run(
-                        ['git', 'push'],
-                        cwd=repo_path,
-                        capture_output=True,
-                        text=True,
-                        check=True
-                    )
-                    
-                    log_banner("GIT PUSH SUCCESSFUL WITH FALLBACK METHOD")
-                    logger.info("Changes pushed to remote repository using fallback method")
-                    logger.info(f"Push details: {fallback_result.stdout}")
-                    print("Changes pushed to remote repository using fallback method")
-                    return True
-                except subprocess.CalledProcessError as e:
+                if not success:
                     log_banner("ALL GIT PUSH METHODS FAILED - LOCAL COMMIT ONLY")
-                    logger.error(f"Final fallback push also failed: {str(e)}")
-                    if e.stderr:
-                        logger.error(f"Error details: {e.stderr}")
                     logger.warning("All push attempts failed, but changes are committed locally")
                     print("All push attempts failed, but changes are committed locally")
                     return True  # Return True since we at least committed locally
