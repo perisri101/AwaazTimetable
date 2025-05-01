@@ -1,0 +1,9 @@
+<td>
+    <!-- Debug output -->
+    <!-- {{ activity }} -->
+    
+    <!-- Try different possible paths to the category name -->
+    {{ activity.category_name if activity.category_name else 
+       (activity.category.name if activity.category else 
+       (activity.get('category_name', 'Unknown Category')) }}
+</td> 
