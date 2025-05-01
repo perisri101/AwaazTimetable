@@ -1,0 +1,44 @@
+[
+  {
+    "caregiver_id": 21,
+    "day_of_week": 0,
+    "start_hour": 0,
+    "end_hour": 2
+  },
+  {
+    "caregiver_id": 24,
+    "day_of_week": 1,
+    "start_hour": 0,
+    "end_hour": 2
+  },
+  {
+    "caregiver_id": 22,
+    "day_of_week": 2,
+    "start_hour": 0,
+    "end_hour": 2
+  },
+  {
+    "caregiver_id": 23,
+    "day_of_week": 0,
+    "start_hour": 2,
+    "end_hour": 4
+  },
+  {
+    "caregiver_id": 22,
+    "day_of_week": 0,
+    "start_hour": 2,
+    "end_hour": 4
+  },
+  {
+    "caregiver_id": 24,
+    "day_of_week": 1,
+    "start_hour": 2,
+    "end_hour": 4
+  },
+  {
+    "caregiver_id": 23,
+    "day_of_week": 1,
+    "start_hour": 2,
+    "end_hour": 4
+  }
+]
