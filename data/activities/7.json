@@ -2,7 +2,8 @@
   "id": 7,
   "name": "SJ Downtown:Live Music",
   "description": "",
-  "category_id": "10",
+  "category_id": 10,
   "created_by": 1,
-  "created_at": "2025-05-01T03:24:30.467938"
+  "created_at": "2025-05-01T03:24:30.467938",
+  "category_name": "Scheduled-Events"
 }
