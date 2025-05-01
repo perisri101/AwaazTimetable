@@ -1,0 +1,58 @@
+[
+  {
+    "caregiver_id": 21,
+    "day_of_week": 0,
+    "start_hour": 0,
+    "end_hour": 2,
+    "calendar_id": 7,
+    "template_id": null
+  },
+  {
+    "caregiver_id": 24,
+    "day_of_week": 1,
+    "start_hour": 0,
+    "end_hour": 2,
+    "calendar_id": 7,
+    "template_id": null
+  },
+  {
+    "caregiver_id": 22,
+    "day_of_week": 2,
+    "start_hour": 0,
+    "end_hour": 2,
+    "calendar_id": 7,
+    "template_id": null
+  },
+  {
+    "caregiver_id": 23,
+    "day_of_week": 0,
+    "start_hour": 2,
+    "end_hour": 4,
+    "calendar_id": 7,
+    "template_id": null
+  },
+  {
+    "caregiver_id": 22,
+    "day_of_week": 0,
+    "start_hour": 2,
+    "end_hour": 4,
+    "calendar_id": 7,
+    "template_id": null
+  },
+  {
+    "caregiver_id": 24,
+    "day_of_week": 1,
+    "start_hour": 2,
+    "end_hour": 4,
+    "calendar_id": 7,
+    "template_id": null
+  },
+  {
+    "caregiver_id": 23,
+    "day_of_week": 1,
+    "start_hour": 2,
+    "end_hour": 4,
+    "calendar_id": 7,
+    "template_id": null
+  }
+]
